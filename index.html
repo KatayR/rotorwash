@@ -462,12 +462,41 @@ const sky = (() => {
   return mesh;
 })();
 
+// ground detail: a grey grain texture multiplied over the vertex colours
+const GROUND_TILE = 16;   // metres covered by one repeat of the texture
+function groundDetailTexture() {
+  const S = 256, canvas = document.createElement('canvas');
+  canvas.width = canvas.height = S;
+  const ctx = canvas.getContext('2d'), img = ctx.createImageData(S, S), d = img.data, rng = mulberry32(7);
+  // value noise whose lattice wraps at its period, so the tile repeats without seams
+  const layers = [[4, 0.3], [8, 0.3], [16, 0.22], [32, 0.18]].map(([P, w]) => ({ P, w, a: Float32Array.from({ length: P * P }, rng) }));
+  for (let j = 0; j < S; j++) for (let i = 0; i < S; i++) {
+    let n = 0;
+    for (const L of layers) {
+      const fx = i / S * L.P, fz = j / S * L.P, ix = Math.floor(fx), iz = Math.floor(fz);
+      const u = (fx - ix) * (fx - ix) * (3 - 2 * (fx - ix)), v = (fz - iz) * (fz - iz) * (3 - 2 * (fz - iz));
+      const g = (a, b) => L.a[(b % L.P) * L.P + (a % L.P)];
+      const top = g(ix, iz) + (g(ix + 1, iz) - g(ix, iz)) * u, bottom = g(ix, iz + 1) + (g(ix + 1, iz + 1) - g(ix, iz + 1)) * u;
+      n += L.w * (top + (bottom - top) * v);
+    }
+    n += (rng() - 0.5) * 0.3;   // fine grain
+    const val = 255 * clamp(0.9 + (n - 0.5) * 0.32, 0, 1), k = (j * S + i) * 4;
+    d[k] = d[k + 1] = d[k + 2] = val; d[k + 3] = 255;
+  }
+  ctx.putImageData(img, 0, 0);
+  const tex = new THREE.CanvasTexture(canvas);
+  tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
+  tex.anisotropy = renderer.capabilities.getMaxAnisotropy();
+  return tex;
+}
+
 // terrain mesh
 (() => {
-  const pos = new Float32Array(ROW * ROW * 3), cols = new Float32Array(ROW * ROW * 3);
+  const pos = new Float32Array(ROW * ROW * 3), cols = new Float32Array(ROW * ROW * 3), uvs = new Float32Array(ROW * ROW * 2);
   for (let j = 0; j <= N; j++) for (let i = 0; i <= N; i++) {
     const k = (j * ROW + i) * 3;
     pos[k] = -HALF + i * CELL; pos[k + 1] = heights[j * ROW + i]; pos[k + 2] = -HALF + j * CELL;
+    uvs[(j * ROW + i) * 2] = pos[k] / GROUND_TILE; uvs[(j * ROW + i) * 2 + 1] = pos[k + 2] / GROUND_TILE;
   }
   const idx = new Uint32Array(N * N * 6);
   let n = 0;
@@ -478,6 +507,7 @@ const sky = (() => {
   }
   const geo = new THREE.BufferGeometry();
   geo.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+  geo.setAttribute('uv', new THREE.BufferAttribute(uvs, 2));
   geo.setIndex(new THREE.BufferAttribute(idx, 1));
   geo.computeVertexNormals();
   const nrm = geo.attributes.normal.array;
@@ -494,7 +524,8 @@ const sky = (() => {
     cols[v * 3] = c.r; cols[v * 3 + 1] = c.g; cols[v * 3 + 2] = c.b;
   }
   geo.setAttribute('color', new THREE.BufferAttribute(cols, 3));
-  const ground = new THREE.Mesh(geo, new THREE.MeshLambertMaterial({ vertexColors: true }));
+  // colour lifted by 1/0.9 so the texture's average brightness leaves the terrain as bright as before
+  const ground = new THREE.Mesh(geo, new THREE.MeshLambertMaterial({ vertexColors: true, map: groundDetailTexture(), color: new THREE.Color(1.11, 1.11, 1.11) }));
   ground.receiveShadow = true;
   scene.add(ground);
   const outer = new THREE.Mesh(new THREE.PlaneGeometry(12000, 12000), new THREE.MeshLambertMaterial({ color: 0x5f6a4c }));
