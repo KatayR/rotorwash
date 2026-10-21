@@ -721,6 +721,37 @@ const BODY_POINTS = [
 const GUN_POS = V(0, -1.2, -4.4);
 const GUN_DIR = V(0, -Math.sin(0.026), -Math.cos(0.026));
 const POD_POS = [V(-1.9, -0.45, -1.0), V(1.9, -0.45, -1.0)];
+// points on the airframe, tested against each tree's cone; the rotor disc is tested as a whole below
+const TREE_PROBES = [...SKID_POINTS, ...BODY_POINTS.map(b => b.p), V(0, 0.45, 4.5), V(-1, 0, -1), V(1, 0, -1)];
+const ROTOR_HUB = V(0, 2.3, 0), ROTOR_RADIUS = 6.6;
+const probeWorld = TREE_PROBES.map(() => V()), hubWorld = V(), discNormal = V(), axisPoint = V();
+function hitsTree() {
+  let placed = false;
+  for (const t of trees) {
+    const dx = heli.pos.x - t.x, dz = heli.pos.z - t.z, reach = t.r + ROTOR_RADIUS + 1;
+    if (dx * dx + dz * dz > reach * reach || heli.pos.y - 7 > t.top) continue;
+    if (!placed) {
+      TREE_PROBES.forEach((p, i) => probeWorld[i].copy(p).applyQuaternion(heli.q).add(heli.pos));
+      hubWorld.copy(ROTOR_HUB).applyQuaternion(heli.q).add(heli.pos);
+      discNormal.set(0, 1, 0).applyQuaternion(heli.q);
+      placed = true;
+    }
+    // the drawn cone: radius t.r at its base, narrowing to a point at t.top
+    const base = t.base - 0.5, height = t.top - base;
+    const coneRadius = y => t.r * (t.top - y) / height;
+    for (const p of probeWorld) {
+      if (p.y >= t.top || p.y <= base) continue;
+      const r = coneRadius(p.y), ex = p.x - t.x, ez = p.z - t.z;
+      if (ex * ex + ez * ez < r * r) return true;
+    }
+    // rotor disc: where the tree's axis crosses the disc's plane, the cone there must stay outside the disc
+    if (discNormal.y > 0.2) {
+      const y = hubWorld.y - (discNormal.x * (t.x - hubWorld.x) + discNormal.z * (t.z - hubWorld.z)) / discNormal.y;
+      if (y > base && y < t.top && axisPoint.set(t.x, y, t.z).distanceTo(hubWorld) < ROTOR_RADIUS + coneRadius(y)) return true;
+    }
+  }
+  return false;
+}
 
 const heliMesh = new THREE.Group();
 const mainRotor = new THREE.Group(), tailRotor = new THREE.Group();
@@ -1035,10 +1066,7 @@ function resolveContacts(h, inp) {
     tmpA.copy(b.p).applyQuaternion(heli.q).add(heli.pos);
     if (groundHeight(tmpA.x, tmpA.z) - tmpA.y > 0.02) return crash(buildingAt(tmpA.x, tmpA.z) ? 'Hit a building' : b.why);
   }
-  for (const t of trees) {
-    const dx = heli.pos.x - t.x, dz = heli.pos.z - t.z, r = t.r + 5;
-    if (dx * dx + dz * dz < r * r && heli.pos.y - 1.5 < t.top) return crash('Hit a tree');
-  }
+  if (hitsTree()) return crash('Hit a tree');
 }
 
 // ---------- weapons ----------
