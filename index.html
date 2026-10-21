@@ -1,0 +1,1613 @@
+<title>Rotorwash Heli Trainer</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=Saira+Condensed:wght@400;500;600;700&display=swap">
+<style>
+/* Layout: full-bleed 3D view, HUD pinned to the four corners, one menu sheet centred over a dimmed scene. Single dark look on purpose (a cockpit HUD). */
+:root{
+  --panel:#151a16;
+  --panel-raised:#1e251f;
+  --plate:rgba(12,16,13,.46);
+  --scrim:rgba(9,12,10,.6);
+  --ink:#e8eee4;
+  --muted:#9aa698;
+  --line:rgba(232,238,228,.13);
+  --line-strong:rgba(232,238,228,.3);
+  --signal:#ffb547;
+  --on-signal:#1c1306;
+  --danger:#ff5d4b;
+  --good:#8fd99a;
+  --display:"Saira Condensed","Arial Narrow","Roboto Condensed",sans-serif;
+  --mono:"IBM Plex Mono",ui-monospace,Consolas,monospace;
+  color-scheme:dark;
+}
+html,body{height:100%}
+[hidden]{display:none!important}
+body{background:var(--panel);color:var(--ink);font-family:var(--display);font-size:15px;overflow:hidden;-webkit-user-select:none;user-select:none}
+#gl,#hud{position:fixed;inset:0;width:100%;height:100%;display:block}
+#hud{pointer-events:none}
+.hud{position:fixed;pointer-events:none;font-variant-numeric:tabular-nums;text-shadow:0 1px 2px rgba(0,0,0,.6)}
+.plate{background:var(--plate);border-radius:4px;padding:8px 12px}
+.label{font-family:var(--display);font-weight:600;font-size:12px;letter-spacing:.14em;text-transform:uppercase;color:var(--muted)}
+.value{font-family:var(--mono);font-weight:500;font-size:22px;line-height:1}
+.unit{font-family:var(--mono);font-size:12px;color:var(--muted)}
+
+#hud-tl{top:calc(14px + env(safe-area-inset-top,0px));left:calc(16px + env(safe-area-inset-left,0px));display:grid;gap:4px;min-width:210px;max-width:min(320px,calc(100vw - 32px))}
+#drill-main{font-family:var(--mono);font-size:19px;font-weight:500}
+#drill-sub{font-size:14px;line-height:1.3;opacity:.9}
+
+#hud-bl{bottom:calc(16px + env(safe-area-inset-bottom,0px));left:calc(16px + env(safe-area-inset-left,0px));display:flex;gap:14px;align-items:center}
+#att{width:112px;height:112px;display:block}
+.gauges{display:grid;gap:9px}
+.gauge{display:grid;grid-template-columns:34px 64px auto;align-items:baseline;gap:4px}
+.gauge .value{text-align:right}
+.coll{display:grid;justify-items:center;gap:6px}
+.coll-track{position:relative;width:10px;height:96px;border:1px solid var(--line-strong);border-radius:2px}
+.coll-track::after{content:"";position:absolute;left:-5px;right:-5px;top:50%;height:1px;background:var(--ink)}
+.coll-fill{position:absolute;left:0;right:0;top:50%;height:0;background:var(--signal)}
+
+#hud-br{bottom:calc(16px + env(safe-area-inset-bottom,0px));right:calc(16px + env(safe-area-inset-right,0px));display:grid;gap:9px;width:240px}
+.weapon{display:grid;grid-template-columns:62px minmax(0,1fr) 48px;align-items:center;gap:10px}
+.weapon .value{font-size:18px;text-align:right}
+.bar{height:6px;background:rgba(232,238,228,.18);border-radius:1px;overflow:hidden}
+.bar>i{display:block;height:100%;width:0;background:var(--ink)}
+.bar.hot>i{background:var(--danger)}
+.bar.reload>i{background:var(--signal)}
+.stats{display:flex;justify-content:space-between;gap:10px;font-family:var(--mono);font-size:13px;padding-top:6px;border-top:1px solid var(--line)}
+.stats b{font-weight:500;color:var(--ink)}
+.stats span{color:var(--muted)}
+
+#help{top:calc(14px + env(safe-area-inset-top,0px));right:calc(16px + env(safe-area-inset-right,0px));width:240px}
+#help dl{display:grid;grid-template-columns:auto 1fr;gap:3px 12px;margin:6px 0 0;font-size:14px}
+#help dt{color:var(--muted)}
+#help dd{margin:0;font-family:var(--mono);font-size:12.5px;text-align:right}
+#help .label{display:flex;justify-content:space-between}
+
+#msg{left:50%;top:26%;transform:translateX(-50%);text-align:center;opacity:0;transition:opacity .25s;width:max-content;max-width:calc(100vw - 32px)}
+#msg.show{opacity:1}
+#msg-title{font-family:var(--display);font-weight:700;font-size:40px;letter-spacing:.06em;text-transform:uppercase;line-height:1}
+#msg-sub{font-family:var(--mono);font-size:15px;margin-top:6px}
+#msg.danger #msg-title{color:var(--danger)}
+#msg.good #msg-title{color:var(--good)}
+#msg.signal #msg-title{color:var(--signal)}
+#lock-hint{left:50%;bottom:30%;transform:translateX(-50%);font-family:var(--mono);font-size:14px}
+
+#menu{position:fixed;inset:0;z-index:10;display:grid;place-items:center;background:var(--scrim);padding-block:calc(16px + env(safe-area-inset-top,0px)) calc(16px + env(safe-area-inset-bottom,0px));padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));-webkit-user-select:text;user-select:text}
+.sheet{width:min(800px,100%);max-height:100%;overflow:auto;background:var(--panel);border:1px solid var(--line);border-radius:6px;box-shadow:0 24px 70px rgba(0,0,0,.5);display:flex;flex-direction:column}
+.sheet-head{display:flex;flex-wrap:wrap;justify-content:space-between;align-items:flex-end;gap:12px 20px;padding:22px 24px 16px}
+h1{margin:0;font-family:var(--display);font-weight:700;font-size:46px;letter-spacing:.1em;text-transform:uppercase;line-height:.9;text-wrap:balance}
+.tagline{margin:8px 0 0;color:var(--muted);font-size:16px}
+.chip{font-family:var(--mono);font-size:12px;border:1px solid var(--line-strong);border-radius:3px;padding:4px 8px;color:var(--ink);white-space:nowrap}
+.tabs{display:flex;gap:4px;padding:0 24px;border-bottom:1px solid var(--line)}
+.tabs button{background:none;border:0;border-bottom:2px solid transparent;color:var(--muted);font:600 14px var(--display);letter-spacing:.14em;text-transform:uppercase;padding:10px 10px 9px;cursor:pointer}
+.tabs button[aria-selected="true"]{color:var(--ink);border-bottom-color:var(--signal)}
+.pane{padding:20px 24px 22px;display:grid;gap:20px}
+.drills{border:0;margin:0;padding:0;display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px}
+.drills legend{padding:0;margin-bottom:8px}
+.drill{position:relative;display:grid;align-content:start;gap:4px;padding:12px 14px;border:1px solid var(--line);border-radius:4px;background:var(--panel-raised);cursor:pointer}
+.drill input{position:absolute;opacity:0;pointer-events:none}
+.drill:has(input:checked){border-color:var(--signal);box-shadow:inset 0 0 0 1px var(--signal)}
+.drill:has(input:focus-visible){outline:2px solid var(--signal);outline-offset:2px}
+.drill-title{font-weight:600;font-size:18px;letter-spacing:.03em}
+.drill-text{color:var(--muted);font-size:14px;line-height:1.35}
+.summary dl{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:2px 24px;margin:8px 0 0}
+.summary dl div{display:flex;justify-content:space-between;gap:12px;border-bottom:1px dashed var(--line);padding:5px 0}
+.summary dt{color:var(--muted)}
+.summary dd{margin:0;font-family:var(--mono);font-size:13px;text-align:right}
+.actions{display:flex;flex-wrap:wrap;gap:10px;align-items:center}
+button.primary{background:var(--signal);color:var(--on-signal);border:0;border-radius:4px;font:700 17px var(--display);letter-spacing:.16em;text-transform:uppercase;padding:12px 34px;cursor:pointer}
+button.ghost{background:transparent;color:var(--ink);border:1px solid var(--line-strong);border-radius:4px;font:600 14px var(--display);letter-spacing:.1em;text-transform:uppercase;padding:11px 18px;cursor:pointer}
+button.primary:hover{filter:brightness(1.08)}
+button.ghost:hover{border-color:var(--ink)}
+button:focus-visible,select:focus-visible,input:focus-visible{outline:2px solid var(--signal);outline-offset:2px}
+.hint{color:var(--muted);margin:0;font-size:14px;line-height:1.4;max-width:65ch}
+.note{margin:0;color:var(--signal);font-size:15px}
+.bind-list{display:grid}
+.bind-row{display:grid;grid-template-columns:150px minmax(0,1fr);gap:6px 16px;align-items:center;padding:10px 0;border-bottom:1px solid var(--line)}
+.bind-name{font-weight:600;font-size:16px;letter-spacing:.03em}
+.bind-ctl{display:flex;flex-wrap:wrap;align-items:center;gap:8px 10px;min-width:0}
+.seg{display:inline-flex;border:1px solid var(--line-strong);border-radius:4px;overflow:hidden}
+.seg button{background:transparent;border:0;color:var(--muted);font:500 12.5px var(--mono);padding:6px 10px;cursor:pointer}
+.seg button+button{border-left:1px solid var(--line)}
+.seg button[aria-pressed="true"]{background:var(--panel-raised);color:var(--ink);box-shadow:inset 0 -2px 0 var(--signal)}
+.slot{display:inline-flex;align-items:center;gap:6px}
+.dir{color:var(--muted);font-size:14px}
+.key{min-width:64px;background:var(--panel-raised);border:1px solid var(--line-strong);border-bottom-width:3px;border-radius:4px;color:var(--ink);font:500 13px var(--mono);padding:5px 10px;cursor:pointer}
+.key.listening{border-color:var(--signal);color:var(--signal)}
+.chk{display:inline-flex;align-items:center;gap:6px;color:var(--ink);font-size:15px;cursor:pointer}
+.chk input{accent-color:var(--signal);width:16px;height:16px}
+.warn{grid-column:2;color:var(--signal);font-size:14px}
+.field{display:grid;grid-template-columns:170px minmax(0,1fr) 56px;align-items:center;gap:12px}
+.field label{font-weight:600;font-size:16px}
+.field output{font-family:var(--mono);font-size:13px;text-align:right}
+input[type=range]{width:100%;accent-color:var(--signal)}
+select{background:var(--panel-raised);color:var(--ink);border:1px solid var(--line-strong);border-radius:4px;padding:6px 8px;font:500 14px var(--mono)}
+.sheet-foot{display:flex;justify-content:space-between;gap:12px;padding:10px 24px;border-top:1px solid var(--line);font:400 12px var(--mono);color:var(--muted)}
+@media (max-width:640px){
+  .drills{grid-template-columns:1fr}
+  .bind-row{grid-template-columns:1fr}
+  .warn{grid-column:auto}
+  .field{grid-template-columns:1fr 56px}
+  .field label{grid-column:1/-1}
+  h1{font-size:38px}
+  #help,#hud-br{display:none}
+}
+@media (prefers-reduced-motion:reduce){#msg{transition:none}}
+</style>
+
+<canvas id="gl"></canvas>
+<canvas id="hud"></canvas>
+
+<div class="hud plate" id="hud-tl">
+  <div class="label" id="drill-name">Free flight</div>
+  <div id="drill-main"></div>
+  <div id="drill-sub"></div>
+</div>
+
+<div class="hud plate" id="hud-bl">
+  <canvas id="att" width="224" height="224"></canvas>
+  <div class="gauges">
+    <div class="gauge"><span class="label">Alt</span><span class="value" id="g-alt">0</span><span class="unit">m</span></div>
+    <div class="gauge"><span class="label">Spd</span><span class="value" id="g-spd">0</span><span class="unit">km/h</span></div>
+    <div class="gauge"><span class="label">V/S</span><span class="value" id="g-vs">0.0</span><span class="unit">m/s</span></div>
+  </div>
+  <div class="coll"><div class="coll-track"><div class="coll-fill" id="g-coll"></div></div><span class="label">Coll</span></div>
+</div>
+
+<div class="hud plate" id="hud-br">
+  <div class="weapon"><span class="label">Gun</span><div class="bar" id="b-gun"><i></i></div><span class="value" id="v-gun">0%</span></div>
+  <div class="weapon"><span class="label">Rockets</span><div class="bar reload" id="b-rkt"><i></i></div><span class="value" id="v-rkt">14</span></div>
+  <div class="stats"><span>Kills <b id="s-kills">0</b></span><span>Accuracy <b id="s-acc">–</b></span><span>Crashes <b id="s-crash">0</b></span></div>
+</div>
+
+<div class="hud plate" id="help">
+  <div class="label"><span>Controls</span><span id="help-key">H hides</span></div>
+  <dl id="help-list"></dl>
+</div>
+
+<div class="hud" id="msg"><div id="msg-title"></div><div id="msg-sub"></div></div>
+<div class="hud plate" id="lock-hint" hidden>Click the view to capture the mouse</div>
+
+<div id="menu" role="dialog" aria-modal="true" aria-labelledby="menu-title">
+  <div class="sheet">
+    <header class="sheet-head">
+      <div>
+        <h1 id="menu-title">Rotorwash</h1>
+        <p class="tagline">Helicopter flight trainer with Battlefield-style controls</p>
+      </div>
+      <span class="chip" id="menu-state">On the pad · 0 m AGL</span>
+    </header>
+    <div class="tabs" role="tablist">
+      <button role="tab" id="tab-fly" aria-selected="true" aria-controls="pane-fly">Fly</button>
+      <button role="tab" id="tab-controls" aria-selected="false" aria-controls="pane-controls">Controls</button>
+      <button role="tab" id="tab-settings" aria-selected="false" aria-controls="pane-settings">Settings</button>
+    </div>
+
+    <section class="pane" id="pane-fly" role="tabpanel" aria-labelledby="tab-fly">
+      <fieldset class="drills">
+        <legend class="label">Drill</legend>
+        <label class="drill"><input type="radio" name="drill" value="free" id="drill-free"><span class="drill-title">Free flight</span><span class="drill-text">Fly anywhere. Vehicles marked in red are targets for the gun and rockets.</span></label>
+        <label class="drill"><input type="radio" name="drill" value="rings" id="drill-rings"><span class="drill-title">Ring course</span><span class="drill-text">Ten rings through the valleys and over the town, against the clock. Your best time is kept.</span></label>
+        <label class="drill"><input type="radio" name="drill" value="landing" id="drill-landing"><span class="drill-title">Landing drill</span><span class="drill-text">Fly to each pad in turn, including a rooftop, and set down gently. Touch-down speed is graded.</span></label>
+      </fieldset>
+      <div class="summary">
+        <h2 class="label" style="margin:0">Your controls</h2>
+        <dl id="summary"></dl>
+      </div>
+      <p class="note" id="coarse-note" hidden>This trainer needs a keyboard and mouse.</p>
+      <div class="actions">
+        <button class="primary" id="btn-fly">Fly</button>
+        <button class="ghost" id="btn-respawn">Respawn on pad</button>
+      </div>
+    </section>
+
+    <section class="pane" id="pane-controls" role="tabpanel" aria-labelledby="tab-controls" hidden>
+      <p class="hint">Click a key box, then press a key or a mouse button. Esc cancels and Delete clears it. Pitch, roll and yaw can each run on keys or on a mouse axis.</p>
+      <div class="bind-list" id="bind-list"></div>
+      <div class="actions"><button class="ghost" id="btn-reset">Reset to defaults</button></div>
+    </section>
+
+    <section class="pane" id="pane-settings" role="tabpanel" aria-labelledby="tab-settings" hidden>
+      <div class="field"><label for="sens">Mouse sensitivity</label><input type="range" id="sens" min="0.2" max="3" step="0.05"><output id="sens-out" for="sens">1.00</output></div>
+      <div class="field"><label for="scale">Render scale</label><select id="scale"><option value="1">100% (sharpest)</option><option value="0.75">75%</option><option value="0.5">50% (fastest)</option></select><span></span></div>
+      <div class="field"><label for="shadows">Shadows</label><select id="shadows"><option value="on">On</option><option value="off">Off (faster)</option></select><span></span></div>
+      <p class="hint">If the frame counter below drops under 60, turn shadows off or lower the render scale.</p>
+    </section>
+
+    <footer class="sheet-foot"><span id="fps">– fps</span><span>Esc pauses</span></footer>
+  </div>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script>
+'use strict';
+
+// All flight and weapon constants live here so the feel is easy to tune.
+const TUNING = {
+  gravity: 9.81,
+  hoverThrust: 0.95,       // thrust in g with no throttle input: a slow sink (about 0.6 m/s), like Battlefield
+  climbThrust: 1.1,        // extra g at full throttle up
+  descendThrust: 0.6,      // g removed at full throttle down
+  dragLinear: 0.03,
+  dragQuad: 0.0012,        // sets the top speed (about 310 km/h nose-down at full throttle)
+  dragVertical: 0.8,       // how quickly a climb or sink settles once the throttle is released
+  dragSide: 0.12,          // extra damping of sideways slip
+  weathervane: 1.4,        // how strongly the tail swings the nose into the airflow
+  groundEffectHeight: 8,   // metres above ground where the cushion starts
+  groundEffectDamping: 0.8,
+  ceiling: 700,
+  pitchRate: 1.5, rollRate: 2.2, yawRate: 1.4,   // rad/s at full key input
+  mouseRate: 0.0022,       // rad/s per pixel/s of mouse movement at sensitivity 1
+  mouseRateCap: 1.6,       // mouse can turn at most this many times the key rate
+  angularResponse: 9,      // how quickly rotation follows input (1/s)
+  crashVerticalSpeed: 7, crashHorizontalSpeed: 14, crashTiltCos: 0.8,
+  gunRate: 12, gunHeatPerShot: 0.06, gunCooling: 0.35, bulletSpeed: 650, bulletGravity: 0.5, bulletDamage: 7, gunSpread: 0.004,
+  rocketCount: 14, rocketInterval: 0.16, rocketReload: 8, rocketSpeed: 170, rocketGravity: 0.6, rocketDamage: 60, rocketSplash: 9,
+  targetHp: 100, targetRespawn: 20,
+  chaseDistance: 17, chaseHeight: 4.5, chaseLag: 6, fov: 72,
+};
+
+const $ = id => document.getElementById(id);
+const clamp = (v, a, b) => v < a ? a : v > b ? b : v;
+const smoothstep = (a, b, x) => { const t = clamp((x - a) / (b - a), 0, 1); return t * t * (3 - 2 * t); };
+const V = (x = 0, y = 0, z = 0) => new THREE.Vector3(x, y, z);
+const UP = V(0, 1, 0);
+const G = TUNING.gravity;
+
+// ---------- storage (per-browser conveniences only) ----------
+const KEYS = { bindings: 'rotorwash.bindings.v1', settings: 'rotorwash.settings.v1', best: 'rotorwash.bestRing.v1', help: 'rotorwash.help.v1' };
+const store = {
+  get(key, fallback) { try { const s = localStorage.getItem(key); return s ? JSON.parse(s) : fallback; } catch (e) { return fallback; } },
+  set(key, value) { try { localStorage.setItem(key, JSON.stringify(value)); } catch (e) { /* storage unavailable */ } },
+};
+
+// ---------- bindings ----------
+const AXES = {
+  throttle: { label: 'Throttle', pos: 'Up', neg: 'Down', order: ['pos', 'neg'], mouse: false },
+  pitch:    { label: 'Pitch', pos: 'Nose up', neg: 'Nose down', order: ['pos', 'neg'], mouse: true },
+  roll:     { label: 'Roll', pos: 'Right', neg: 'Left', order: ['neg', 'pos'], mouse: true },
+  yaw:      { label: 'Yaw', pos: 'Right', neg: 'Left', order: ['neg', 'pos'], mouse: true },
+};
+const BUTTONS = {
+  fire: { label: 'Fire gun' },
+  rockets: { label: 'Fire rockets' },
+  camera: { label: 'Switch camera' },
+  respawn: { label: 'Respawn on pad (hold)' },
+  help: { label: 'Show / hide help' },
+};
+const DEFAULT_BINDINGS = {
+  throttle: { mode: 'keys', axis: 'y', invert: false, pos: 'KeyW', neg: 'KeyS' },
+  pitch:    { mode: 'mouse', axis: 'y', invert: false, pos: null, neg: null },
+  roll:     { mode: 'keys', axis: 'x', invert: false, pos: 'KeyD', neg: 'KeyA' },
+  yaw:      { mode: 'mouse', axis: 'x', invert: false, pos: null, neg: null },
+  fire:     { code: 'Mouse0' },
+  rockets:  { code: 'Mouse2' },
+  camera:   { code: 'KeyC' },
+  respawn:  { code: 'KeyR' },
+  help:     { code: 'KeyH' },
+};
+const copyDefaults = () => JSON.parse(JSON.stringify(DEFAULT_BINDINGS));
+function loadBindings() {
+  const b = copyDefaults();
+  const saved = store.get(KEYS.bindings, null);
+  if (saved && typeof saved === 'object') {
+    for (const k in b) if (saved[k] && typeof saved[k] === 'object') Object.assign(b[k], saved[k]);
+  }
+  if (b.throttle.mode !== 'keys') b.throttle.mode = 'keys';
+  return b;
+}
+let bindings = loadBindings();
+const saveBindings = () => store.set(KEYS.bindings, bindings);
+
+function keyName(code) {
+  if (!code) return '—';
+  const mouse = { Mouse0: 'Left click', Mouse1: 'Middle click', Mouse2: 'Right click', Mouse3: 'Mouse 4', Mouse4: 'Mouse 5' };
+  if (mouse[code]) return mouse[code];
+  if (code.startsWith('Key')) return code.slice(3);
+  if (code.startsWith('Digit')) return code.slice(5);
+  if (code.startsWith('Numpad')) return 'Num ' + code.slice(6);
+  const named = { Space: 'Space', ShiftLeft: 'L Shift', ShiftRight: 'R Shift', ControlLeft: 'L Ctrl', ControlRight: 'R Ctrl',
+    AltLeft: 'L Alt', AltRight: 'R Alt', ArrowUp: '↑', ArrowDown: '↓', ArrowLeft: '←', ArrowRight: '→', Tab: 'Tab',
+    CapsLock: 'Caps', Enter: 'Enter', Backquote: '`', Minus: '-', Equal: '=', BracketLeft: '[', BracketRight: ']',
+    Semicolon: ';', Quote: "'", Comma: ',', Period: '.', Slash: '/', Backslash: '\\' };
+  return named[code] || code;
+}
+function bindingText(name) {
+  const b = bindings[name], meta = AXES[name];
+  if (!meta) return keyName(b.code);
+  if (b.mode === 'mouse') return `Mouse ${b.axis.toUpperCase()}${b.invert ? ' (inverted)' : ''}`;
+  return meta.order.map(s => `${keyName(b[s])} ${meta[s].toLowerCase()}`).join(' · ');
+}
+
+// ---------- settings ----------
+const settings = Object.assign({ sens: 1, scale: 1, drill: 'free', shadows: true }, store.get(KEYS.settings, {}));
+settings.shadows = settings.shadows !== false;
+settings.sens = clamp(Number(settings.sens) || 1, 0.2, 3);
+if (![1, 0.75, 0.5].includes(Number(settings.scale))) settings.scale = 1;
+settings.scale = Number(settings.scale);
+if (!['free', 'rings', 'landing'].includes(settings.drill)) settings.drill = 'free';
+const saveSettings = () => store.set(KEYS.settings, settings);
+
+// ---------- noise ----------
+function mulberry32(a) {
+  return function () {
+    a |= 0; a = a + 0x6D2B79F5 | 0;
+    let t = Math.imul(a ^ a >>> 15, 1 | a);
+    t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t;
+    return ((t ^ t >>> 14) >>> 0) / 4294967296;
+  };
+}
+function hash2(ix, iz) {
+  let h = Math.imul(ix, 374761393) ^ Math.imul(iz, 668265263) ^ 0x5bd1e995;
+  h = Math.imul(h ^ (h >>> 13), 1274126177);
+  h ^= h >>> 16;
+  return (h >>> 0) / 4294967296;
+}
+function vnoise(x, z) {
+  const ix = Math.floor(x), iz = Math.floor(z), fx = x - ix, fz = z - iz;
+  const u = fx * fx * (3 - 2 * fx), v = fz * fz * (3 - 2 * fz);
+  const a = hash2(ix, iz), b = hash2(ix + 1, iz), c = hash2(ix, iz + 1), d = hash2(ix + 1, iz + 1);
+  return (a + (b - a) * u + (c - a) * v + (a - b - c + d) * u * v) * 2 - 1;
+}
+function fbm(x, z, octaves) {
+  let sum = 0, amp = 1, norm = 0, f = 1;
+  for (let i = 0; i < octaves; i++) { sum += amp * vnoise(x * f + i * 17.3, z * f - i * 9.1); norm += amp; amp *= 0.5; f *= 2.03; }
+  return sum / norm;
+}
+
+// ---------- world layout ----------
+const WORLD = 2000, HALF = WORLD / 2, N = 200, CELL = WORLD / N, ROW = N + 1;
+const TOWN = { x: 260, z: 150 };
+const PADS = [
+  { name: 'Home pad', label: 'HOME', x: 0, z: 350 },
+  { name: 'Pad A', label: 'A', x: -520, z: -180 },
+  { name: 'Pad B', label: 'B', x: 430, z: -470 },
+  { name: 'Rooftop C', label: 'C', x: TOWN.x, z: TOWN.z, roof: true },
+];
+const PAD_RADIUS = 12;
+const TARGET_SPOTS = [[-260, 110], [-232, 136], [-286, 150], [120, -230], [150, -204], [94, -196],
+  [-120, -420], [-88, -446], [-152, -442], [-400, -40], [-432, -10], [-378, 4]];
+const RING_PATH = [[0, 250, 18], [60, 110, 24], [200, 30, 22], [340, 170, 20], [430, -120, 28],
+  [250, -380, 24], [-60, -470, 34], [-360, -300, 24], [-470, 40, 28], [-220, 260, 20]];
+
+function rawHeight(x, z) {
+  const n = fbm(x * 0.0026, z * 0.0026, 5);
+  let h = Math.pow(clamp(n * 0.75 + 0.5, 0, 1), 1.7) * 105;
+  const r = Math.max(Math.abs(x), Math.abs(z)) / HALF;
+  h += smoothstep(0.6, 0.98, r) * (190 + 110 * fbm(x * 0.007 + 40, z * 0.007 - 12, 4));
+  return h;
+}
+const ZONES = [{ x: TOWN.x, z: TOWN.z, r0: 250, r1: 350 }]
+  .concat(PADS.filter(p => !p.roof).map(p => ({ x: p.x, z: p.z, r0: 40, r1: 110 })));
+ZONES.forEach(zn => { zn.h = rawHeight(zn.x, zn.z); });
+function shapedHeight(x, z) {
+  let h = rawHeight(x, z);
+  for (const zn of ZONES) {
+    const d = Math.hypot(x - zn.x, z - zn.z);
+    if (d < zn.r1) h += (zn.h - h) * (1 - smoothstep(zn.r0, zn.r1, d));
+  }
+  return h;
+}
+
+const heights = new Float32Array(ROW * ROW);
+for (let j = 0; j <= N; j++) for (let i = 0; i <= N; i++) heights[j * ROW + i] = shapedHeight(-HALF + i * CELL, -HALF + j * CELL);
+
+// Matches the mesh's own triangles exactly, so skids sit on what is drawn.
+function terrainHeight(x, z) {
+  const fx = clamp((x + HALF) / CELL, 0, N - 1e-4), fz = clamp((z + HALF) / CELL, 0, N - 1e-4);
+  const i = Math.floor(fx), j = Math.floor(fz), u = fx - i, v = fz - j;
+  const h00 = heights[j * ROW + i], h10 = heights[j * ROW + i + 1], h01 = heights[(j + 1) * ROW + i], h11 = heights[(j + 1) * ROW + i + 1];
+  return (u + v <= 1) ? h00 + (h10 - h00) * u + (h01 - h00) * v : h11 + (h01 - h11) * (1 - u) + (h10 - h11) * (1 - v);
+}
+
+const buildings = [];
+let townBox = { x0: 0, x1: 0, z0: 0, z1: 0 };
+function buildingAt(x, z) {
+  if (x < townBox.x0 || x > townBox.x1 || z < townBox.z0 || z > townBox.z1) return null;
+  for (const b of buildings) if (x >= b.x0 && x <= b.x1 && z >= b.z0 && z <= b.z1) return b;
+  return null;
+}
+function groundHeight(x, z) {
+  const h = terrainHeight(x, z);
+  const b = buildingAt(x, z);
+  return b && b.top > h ? b.top : h;
+}
+
+// ---------- renderer and scene ----------
+const glCanvas = $('gl');
+const renderer = new THREE.WebGLRenderer({ canvas: glCanvas, antialias: true, powerPreference: 'high-performance' });
+const scene = new THREE.Scene();
+const HORIZON = new THREE.Color(0xc6d4da), ZENITH = new THREE.Color(0x5f8fb8);
+scene.background = HORIZON.clone();
+scene.fog = new THREE.Fog(HORIZON.getHex(), 380, 1650);
+const camera = new THREE.PerspectiveCamera(TUNING.fov, 1, 0.5, 3400);
+// sky fill kept low enough that shadows read; overall brightness matches the shadow-free version
+scene.add(new THREE.HemisphereLight(0xdfe9f2, 0x5b5140, 0.55));
+const sun = new THREE.DirectionalLight(0xfff0d8, 1.3);
+const SUN_DIR = V(-0.6, 0.65, 0.45).normalize();   // afternoon sun, about 40° up, for long readable shadows
+sun.position.copy(SUN_DIR);
+scene.add(sun);
+// one shadow map that follows the helicopter, covering 360 m around the view
+const SHADOW_HALF = 180, SHADOW_MAP = 2048;
+renderer.shadowMap.enabled = true;
+renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+sun.shadow.mapSize.set(SHADOW_MAP, SHADOW_MAP);
+Object.assign(sun.shadow.camera, { left: -SHADOW_HALF, right: SHADOW_HALF, top: SHADOW_HALF, bottom: -SHADOW_HALF, near: 10, far: 1200 });
+sun.shadow.camera.updateProjectionMatrix();
+sun.shadow.bias = -0.0004;
+sun.shadow.normalBias = 0.6;
+scene.add(sun.target);
+function updateSun() {
+  if (!sun.castShadow) return;
+  const snap = 2 * SHADOW_HALF / SHADOW_MAP;   // move in whole shadow texels so edges don't shimmer
+  tmpSun.copy(heli.pos).addScaledVector(tmpSunF.set(camF.x, 0, camF.z).normalize(), 60);
+  sun.target.position.set(Math.round(tmpSun.x / snap) * snap, Math.round(tmpSun.y / snap) * snap, Math.round(tmpSun.z / snap) * snap);
+  sun.position.copy(sun.target.position).addScaledVector(SUN_DIR, 500);
+}
+const tmpSun = V(), tmpSunF = V();
+
+// sky dome
+const sky = (() => {
+  const geo = new THREE.SphereGeometry(2600, 24, 12);
+  const p = geo.attributes.position, cols = new Float32Array(p.count * 3), c = new THREE.Color();
+  for (let i = 0; i < p.count; i++) {
+    const t = clamp(p.getY(i) / 2600, 0, 1);
+    c.copy(HORIZON).lerp(ZENITH, Math.pow(t, 0.55));
+    cols[i * 3] = c.r; cols[i * 3 + 1] = c.g; cols[i * 3 + 2] = c.b;
+  }
+  geo.setAttribute('color', new THREE.BufferAttribute(cols, 3));
+  const mesh = new THREE.Mesh(geo, new THREE.MeshBasicMaterial({ vertexColors: true, side: THREE.BackSide, fog: false, depthWrite: false }));
+  mesh.renderOrder = -1;
+  scene.add(mesh);
+  return mesh;
+})();
+
+// terrain mesh
+(() => {
+  const pos = new Float32Array(ROW * ROW * 3), cols = new Float32Array(ROW * ROW * 3);
+  for (let j = 0; j <= N; j++) for (let i = 0; i <= N; i++) {
+    const k = (j * ROW + i) * 3;
+    pos[k] = -HALF + i * CELL; pos[k + 1] = heights[j * ROW + i]; pos[k + 2] = -HALF + j * CELL;
+  }
+  const idx = new Uint32Array(N * N * 6);
+  let n = 0;
+  for (let j = 0; j < N; j++) for (let i = 0; i < N; i++) {
+    const a = j * ROW + i, b = a + 1, c = a + ROW, d = c + 1;
+    idx[n++] = a; idx[n++] = c; idx[n++] = b;
+    idx[n++] = b; idx[n++] = c; idx[n++] = d;
+  }
+  const geo = new THREE.BufferGeometry();
+  geo.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+  geo.setIndex(new THREE.BufferAttribute(idx, 1));
+  geo.computeVertexNormals();
+  const nrm = geo.attributes.normal.array;
+  const grassA = new THREE.Color(0.30, 0.42, 0.20), grassB = new THREE.Color(0.50, 0.48, 0.27);
+  const rock = new THREE.Color(0.43, 0.41, 0.38), snow = new THREE.Color(0.9, 0.92, 0.94), town = new THREE.Color(0.5, 0.48, 0.43);
+  const c = new THREE.Color();
+  const town0 = ZONES[0];
+  for (let v = 0; v < ROW * ROW; v++) {
+    const x = pos[v * 3], h = pos[v * 3 + 1], z = pos[v * 3 + 2], slope = 1 - nrm[v * 3 + 1];
+    c.copy(grassA).lerp(grassB, clamp(fbm(x * 0.02, z * 0.02, 2) * 0.9 + 0.5, 0, 1));
+    c.lerp(rock, Math.max(smoothstep(0.16, 0.36, slope), smoothstep(150, 215, h) * 0.75));
+    c.lerp(snow, smoothstep(215, 255, h) * (1 - smoothstep(0.3, 0.5, slope)));
+    c.lerp(town, 1 - smoothstep(town0.r0 - 20, town0.r0 + 15, Math.hypot(x - town0.x, z - town0.z)));
+    cols[v * 3] = c.r; cols[v * 3 + 1] = c.g; cols[v * 3 + 2] = c.b;
+  }
+  geo.setAttribute('color', new THREE.BufferAttribute(cols, 3));
+  const ground = new THREE.Mesh(geo, new THREE.MeshLambertMaterial({ vertexColors: true }));
+  ground.receiveShadow = true;
+  scene.add(ground);
+  const outer = new THREE.Mesh(new THREE.PlaneGeometry(12000, 12000), new THREE.MeshLambertMaterial({ color: 0x5f6a4c }));
+  outer.rotation.x = -Math.PI / 2; outer.position.y = -2;
+  scene.add(outer);
+})();
+
+// town: one merged mesh of boxes
+const centreBuilding = (() => {
+  const rng = mulberry32(1337), townH = ZONES[0].h;
+  const palette = [0x9e978a, 0x8b867c, 0xb3a891, 0x7d7b74, 0xa39a86].map(h => new THREE.Color(h));
+  const towerPalette = [0x6f7c86, 0x5d6870, 0x8a949a].map(h => new THREE.Color(h));
+  const groundPads = PADS.filter(p => !p.roof);
+  const arr = { pos: [], nor: [], col: [] };
+  const addBox = (x0, x1, y0, y1, z0, z1, col) => {
+    const roof = col.clone().multiplyScalar(0.78);
+    const faces = [
+      [[x0, y1, z0], [x0, y1, z1], [x1, y1, z1], [x1, y1, z0], [0, 1, 0], roof],
+      [[x1, y0, z1], [x1, y0, z0], [x1, y1, z0], [x1, y1, z1], [1, 0, 0], col],
+      [[x0, y0, z0], [x0, y0, z1], [x0, y1, z1], [x0, y1, z0], [-1, 0, 0], col],
+      [[x0, y0, z1], [x1, y0, z1], [x1, y1, z1], [x0, y1, z1], [0, 0, 1], col],
+      [[x1, y0, z0], [x0, y0, z0], [x0, y1, z0], [x1, y1, z0], [0, 0, -1], col],
+    ];
+    for (const [a, b, c, d, n, cc] of faces) for (const v of [a, b, c, a, c, d]) {
+      arr.pos.push(v[0], v[1], v[2]); arr.nor.push(n[0], n[1], n[2]); arr.col.push(cc.r, cc.g, cc.b);
+    }
+  };
+  let centre = null;
+  // a round town 13 blocks across; towers rise in a band around the rooftop-pad building
+  for (let gx = -6; gx <= 6; gx++) for (let gz = -6; gz <= 6; gz++) {
+    const ring = Math.hypot(gx, gz);
+    if (ring > 6.3) continue;
+    const cx = TOWN.x + gx * 34 + (gx ? (rng() - 0.5) * 4 : 0), cz = TOWN.z + gz * 34 + (gz ? (rng() - 0.5) * 4 : 0);
+    let w, d, h, colours = palette;
+    if (gx === 0 && gz === 0) { w = 28; d = 28; h = 30; }
+    else {
+      if (rng() < 0.2) continue;
+      if (groundPads.some(p => Math.hypot(cx - p.x, cz - p.z) < 60)) continue;
+      if (ring >= 1.5 && ring <= 4.5 && rng() < 0.18) {
+        w = 14 + rng() * 8; d = 14 + rng() * 8; h = 45 + rng() * 50; colours = towerPalette;
+      } else {
+        w = 12 + rng() * 14; d = 12 + rng() * 14; h = 6 + rng() * (6 + 26 * (1 - ring / 6.3));
+      }
+    }
+    const b = { x0: cx - w / 2, x1: cx + w / 2, z0: cz - d / 2, z1: cz + d / 2, top: townH + h };
+    buildings.push(b);
+    if (gx === 0 && gz === 0) centre = b;
+    addBox(b.x0, b.x1, townH - 3, b.top, b.z0, b.z1, colours[Math.floor(rng() * colours.length)]);
+  }
+  townBox = {
+    x0: Math.min(...buildings.map(b => b.x0)), x1: Math.max(...buildings.map(b => b.x1)),
+    z0: Math.min(...buildings.map(b => b.z0)), z1: Math.max(...buildings.map(b => b.z1)),
+  };
+  const geo = new THREE.BufferGeometry();
+  geo.setAttribute('position', new THREE.Float32BufferAttribute(arr.pos, 3));
+  geo.setAttribute('normal', new THREE.Float32BufferAttribute(arr.nor, 3));
+  geo.setAttribute('color', new THREE.Float32BufferAttribute(arr.col, 3));
+  const town = new THREE.Mesh(geo, new THREE.MeshLambertMaterial({ vertexColors: true }));
+  town.castShadow = town.receiveShadow = true;
+  scene.add(town);
+  return centre;
+})();
+
+// landing pads
+function padTexture(label) {
+  const c = document.createElement('canvas'); c.width = c.height = 256;
+  const x = c.getContext('2d');
+  x.fillStyle = '#3b3d3a'; x.beginPath(); x.arc(128, 128, 128, 0, Math.PI * 2); x.fill();
+  x.strokeStyle = '#ece6cf'; x.lineWidth = 10; x.beginPath(); x.arc(128, 128, 106, 0, Math.PI * 2); x.stroke();
+  x.fillStyle = '#ece6cf'; x.textAlign = 'center'; x.textBaseline = 'middle';
+  x.font = '700 120px "Saira Condensed", Arial, sans-serif'; x.fillText('H', 128, 122);
+  x.fillStyle = '#ffb547'; x.font = '700 30px "Saira Condensed", Arial, sans-serif'; x.fillText(label, 128, 202);
+  return new THREE.CanvasTexture(c);
+}
+for (const p of PADS) {
+  p.y = p.roof ? centreBuilding.top : terrainHeight(p.x, p.z);
+  const mesh = new THREE.Mesh(new THREE.CircleGeometry(PAD_RADIUS, 40),
+    new THREE.MeshLambertMaterial({ map: padTexture(p.label), polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2 }));
+  mesh.rotation.x = -Math.PI / 2;
+  mesh.position.set(p.x, p.y + 0.06, p.z);
+  mesh.receiveShadow = true;
+  scene.add(mesh);
+}
+
+// targets
+const targets = (() => {
+  const hullGeo = new THREE.BoxGeometry(3.4, 1.3, 6.6), trackGeo = new THREE.BoxGeometry(0.8, 1.0, 7.0);
+  const turretGeo = new THREE.BoxGeometry(2.4, 0.9, 2.8), barrelGeo = new THREE.CylinderGeometry(0.14, 0.14, 4, 6);
+  barrelGeo.rotateX(Math.PI / 2);
+  const hullMat = new THREE.MeshLambertMaterial({ color: 0xa58c58 }), darkMat = new THREE.MeshLambertMaterial({ color: 0x4d4532 });
+  const rng = mulberry32(42);
+  return TARGET_SPOTS.map(([x, z]) => {
+    const grp = new THREE.Group();
+    const add = (geo, mat, px, py, pz) => { const m = new THREE.Mesh(geo, mat); m.position.set(px, py, pz); m.userData.mat = mat; m.castShadow = true; grp.add(m); return m; };
+    add(hullGeo, hullMat, 0, 1.05, 0);
+    add(trackGeo, darkMat, -1.75, 0.5, 0); add(trackGeo, darkMat, 1.75, 0.5, 0);
+    const turret = add(turretGeo, darkMat, 0, 2.15, 0.4);
+    add(barrelGeo, darkMat, 0, 2.2, -2.4);
+    const y = terrainHeight(x, z) - 0.15;
+    grp.position.set(x, y, z);
+    grp.rotation.y = rng() * Math.PI * 2;
+    scene.add(grp);
+    return { grp, turret, center: V(x, y + 1.3, z), hp: TUNING.targetHp, alive: true, respawnAt: 0 };
+  });
+})();
+const charMat = new THREE.MeshLambertMaterial({ color: 0x1f1d1a });
+function setTargetWrecked(t, wrecked) {
+  t.grp.children.forEach(m => { m.material = wrecked ? charMat : m.userData.mat; });
+  t.turret.rotation.z = wrecked ? 0.35 : 0;
+  t.turret.position.y = wrecked ? 1.7 : 2.15;
+}
+
+// trees (one instanced mesh)
+const trees = (() => {
+  const list = [], rng = mulberry32(99);
+  for (let tries = 0; list.length < 600 && tries < 8000; tries++) {
+    const x = (rng() * 2 - 1) * 900, z = (rng() * 2 - 1) * 900, h = terrainHeight(x, z);
+    if (h > 185) continue;
+    if (Math.abs(terrainHeight(x + 4, z) - h) + Math.abs(terrainHeight(x, z + 4) - h) > 2.6) continue;
+    if (Math.hypot(x - TOWN.x, z - TOWN.z) < 270) continue;
+    if (PADS.some(p => Math.hypot(x - p.x, z - p.z) < 110)) continue;
+    if (TARGET_SPOTS.some(([tx, tz]) => Math.hypot(x - tx, z - tz) < 30)) continue;
+    if (fbm(x * 0.006 + 70, z * 0.006, 2) < -0.05) continue;
+    const height = 8 + rng() * 8;
+    list.push({ x, z, r: height * 0.3, base: h, top: h + height, height });
+  }
+  const geo = new THREE.ConeGeometry(1, 1, 6); geo.translate(0, 0.5, 0);
+  const mesh = new THREE.InstancedMesh(geo, new THREE.MeshLambertMaterial({ color: 0x2f4a26 }), list.length);
+  const m = new THREE.Matrix4(), q = new THREE.Quaternion(), s = V(), p = V();
+  list.forEach((t, i) => { m.compose(p.set(t.x, t.base - 0.5, t.z), q, s.set(t.r, t.height + 0.5, t.r)); mesh.setMatrixAt(i, m); });
+  mesh.instanceMatrix.needsUpdate = true;
+  mesh.frustumCulled = false;
+  mesh.castShadow = true;
+  scene.add(mesh);
+  return list;
+})();
+
+// ring course
+const RING_RADIUS = 14;
+const ringGroup = new THREE.Group();
+scene.add(ringGroup);
+const RINGS = (() => {
+  const geo = new THREE.TorusGeometry(RING_RADIUS, 0.7, 8, 40);
+  const centres = RING_PATH.map(([x, z, agl]) => {
+    let top = -Infinity;
+    for (let dx = -16; dx <= 16; dx += 16) for (let dz = -16; dz <= 16; dz += 16) top = Math.max(top, groundHeight(x + dx, z + dz));
+    return V(x, top + agl, z);
+  });
+  return centres.map((c, i) => {
+    const prev = centres[Math.max(0, i - 1)], next = centres[Math.min(centres.length - 1, i + 1)];
+    const dir = (i === 0 ? next.clone().sub(c) : next.clone().sub(prev)).setY(0).normalize();
+    const mesh = new THREE.Mesh(geo, new THREE.MeshBasicMaterial({ color: 0xe8eee4, transparent: true, opacity: 0.25 }));
+    mesh.position.copy(c);
+    mesh.lookAt(c.clone().add(dir));
+    ringGroup.add(mesh);
+    return { center: c, normal: dir, mesh };
+  });
+})();
+
+// ---------- helicopter model ----------
+const SKID_DROP = 1.56;
+const SKID_POINTS = [V(-1.1, -1.56, -2.2), V(1.1, -1.56, -2.2), V(-1.1, -1.56, 2.0), V(1.1, -1.56, 2.0)];
+const BODY_POINTS = [
+  { p: V(0, -0.9, -3.9), why: 'Nose hit the ground' }, { p: V(0, 0.4, 8.9), why: 'Tail strike' },
+  { p: V(6.6, 2.3, 0), why: 'Rotor strike' }, { p: V(-6.6, 2.3, 0), why: 'Rotor strike' },
+  { p: V(0, 2.3, -6.6), why: 'Rotor strike' }, { p: V(0, 2.3, 6.6), why: 'Rotor strike' },
+  { p: V(0, 2.5, 0), why: 'Rolled over' },
+];
+const GUN_POS = V(0, -1.2, -4.4);
+const GUN_DIR = V(0, -Math.sin(0.026), -Math.cos(0.026));
+const POD_POS = [V(-1.9, -0.45, -1.0), V(1.9, -0.45, -1.0)];
+
+const heliMesh = new THREE.Group();
+const mainRotor = new THREE.Group(), tailRotor = new THREE.Group();
+(() => {
+  const olive = new THREE.MeshLambertMaterial({ color: 0x56603f }), dark = new THREE.MeshLambertMaterial({ color: 0x2b2f26 });
+  const glass = new THREE.MeshLambertMaterial({ color: 0x22323a }), blade = new THREE.MeshLambertMaterial({ color: 0x1d1f1c });
+  const part = (geo, mat, x, y, z, parent = heliMesh) => { const m = new THREE.Mesh(geo, mat); m.position.set(x, y, z); parent.add(m); return m; };
+  const box = (w, h, d) => new THREE.BoxGeometry(w, h, d);
+  part(box(2.0, 1.9, 5.2), olive, 0, 0, -0.4);
+  part(box(1.5, 1.0, 2.4), glass, 0, 0.9, -1.7);
+  part(box(1.4, 1.2, 1.4), olive, 0, -0.25, -3.5);
+  part(new THREE.SphereGeometry(0.45, 10, 8), dark, 0, -0.85, -3.4);
+  part(box(1.6, 0.8, 3.0), olive, 0, 1.25, 0.3);
+  const boom = part(new THREE.CylinderGeometry(0.32, 0.62, 7, 8), olive, 0, 0.45, 5.3);
+  boom.rotation.x = Math.PI / 2;
+  part(box(0.15, 2.0, 1.3), olive, 0, 1.35, 8.6);
+  part(box(2.4, 0.1, 0.7), olive, 0, 0.5, 7.9);
+  part(box(4.0, 0.15, 1.0), dark, 0, -0.25, -0.8);
+  for (const s of [-1, 1]) {
+    const pod = part(new THREE.CylinderGeometry(0.3, 0.3, 1.6, 8), dark, s * 1.9, -0.5, -1.0);
+    pod.rotation.x = Math.PI / 2;
+    part(box(0.12, 0.12, 4.8), dark, s * 1.1, -1.5, -0.1);
+    part(box(0.1, 0.9, 0.1), dark, s * 1.0, -1.05, -1.5);
+    part(box(0.1, 0.9, 0.1), dark, s * 1.0, -1.05, 1.3);
+  }
+  const gun = part(new THREE.CylinderGeometry(0.08, 0.08, 1.4, 6), dark, 0, -1.2, -3.9);
+  gun.rotation.x = Math.PI / 2;
+  part(new THREE.CylinderGeometry(0.15, 0.15, 0.8, 6), dark, 0, 1.9, 0);
+  mainRotor.position.set(0, 2.3, 0);
+  for (let k = 0; k < 4; k++) {
+    const pivot = new THREE.Group(); pivot.rotation.y = k * Math.PI / 2; mainRotor.add(pivot);
+    part(box(6.4, 0.06, 0.45), blade, 3.3, 0, 0, pivot);
+  }
+  const disc = part(new THREE.CircleGeometry(6.6, 32), new THREE.MeshBasicMaterial({ color: 0x1d1f1c, transparent: true, opacity: 0.12, side: THREE.DoubleSide, depthWrite: false }), 0, 0, 0, mainRotor);
+  disc.rotation.x = -Math.PI / 2;
+  heliMesh.add(mainRotor);
+  tailRotor.position.set(0.25, 1.5, 8.75);
+  part(box(0.05, 2.4, 0.25), blade, 0, 0, 0, tailRotor);
+  part(box(0.05, 0.25, 2.4), blade, 0, 0, 0, tailRotor);
+  heliMesh.add(tailRotor);
+  heliMesh.traverse(o => { if (o.isMesh && o !== disc) o.castShadow = true; });
+  scene.add(heliMesh);
+})();
+
+// ---------- effects ----------
+const particles = (() => {
+  const geo = new THREE.IcosahedronGeometry(1, 0);
+  return Array.from({ length: 220 }, () => {
+    const mesh = new THREE.Mesh(geo, new THREE.MeshBasicMaterial({ transparent: true, depthWrite: false }));
+    mesh.visible = false; scene.add(mesh);
+    return { mesh, vel: V(), t: 0, life: 0, s0: 1, s1: 1, a0: 1, rise: 0, drag: 0, on: false };
+  });
+})();
+let particleCursor = 0;
+function spawnParticle(pos, vel, life, s0, s1, color, a0, rise = 0, drag = 0) {
+  const p = particles[particleCursor]; particleCursor = (particleCursor + 1) % particles.length;
+  p.on = true; p.t = 0; p.life = life; p.s0 = s0; p.s1 = s1; p.a0 = a0; p.rise = rise; p.drag = drag;
+  p.vel.copy(vel); p.mesh.position.copy(pos); p.mesh.material.color.setHex(color); p.mesh.material.opacity = a0;
+  p.mesh.scale.setScalar(s0); p.mesh.visible = true;
+}
+const rndVec = (v, s) => v.set((Math.random() * 2 - 1) * s, (Math.random() * 2 - 1) * s, (Math.random() * 2 - 1) * s);
+const tmpP = V();
+function explosion(pos, big) {
+  const s = big ? 1 : 0.6;
+  spawnParticle(pos, tmpP.set(0, 0, 0), 0.35, 2 * s, 10 * s, 0xfff0c0, 0.9);
+  for (let i = 0; i < (big ? 10 : 6); i++) { rndVec(tmpP, 12 * s).y += 6 * s; spawnParticle(pos, tmpP, 0.6 + Math.random() * 0.3, 1.5 * s, 4 * s, 0xff9a3c, 0.9, 0, 2); }
+  for (let i = 0; i < (big ? 10 : 5); i++) { rndVec(tmpP, 4 * s).y += 3; spawnParticle(pos, tmpP, 2 + Math.random() * 1.5, 2 * s, 8 * s, 0x45423d, 0.55, 1.5, 1); }
+}
+function updateParticles(dt) {
+  for (const p of particles) {
+    if (!p.on) continue;
+    p.t += dt;
+    const k = p.t / p.life;
+    if (k >= 1) { p.on = false; p.mesh.visible = false; continue; }
+    p.vel.y += p.rise * dt;
+    if (p.drag) p.vel.multiplyScalar(Math.exp(-p.drag * dt));
+    p.mesh.position.addScaledVector(p.vel, dt);
+    p.mesh.scale.setScalar(p.s0 + (p.s1 - p.s0) * (1 - (1 - k) * (1 - k)));
+    p.mesh.material.opacity = p.a0 * (1 - k);
+  }
+}
+
+// bullets drawn as tracer lines
+const MAX_BULLETS = 160;
+const bullets = Array.from({ length: MAX_BULLETS }, () => ({ on: false, pos: V(), prev: V(), vel: V(), life: 0 }));
+let bulletCursor = 0;
+const tracerPos = new Float32Array(MAX_BULLETS * 6);
+const tracerGeo = new THREE.BufferGeometry();
+tracerGeo.setAttribute('position', new THREE.BufferAttribute(tracerPos, 3).setUsage(THREE.DynamicDrawUsage));
+const tracerLines = new THREE.LineSegments(tracerGeo, new THREE.LineBasicMaterial({ color: 0xffd27a, transparent: true, opacity: 0.9 }));
+tracerLines.frustumCulled = false;
+scene.add(tracerLines);
+
+const ZAXIS = V(0, 0, 1);
+const rockets = (() => {
+  const geo = new THREE.CylinderGeometry(0.11, 0.11, 1.3, 6); geo.rotateX(Math.PI / 2);
+  const mat = new THREE.MeshBasicMaterial({ color: 0xdedad0 });
+  return Array.from({ length: 24 }, () => {
+    const mesh = new THREE.Mesh(geo, mat); mesh.visible = false; scene.add(mesh);
+    return { mesh, on: false, pos: V(), prev: V(), vel: V(), life: 0, smoke: 0 };
+  });
+})();
+let rocketCursor = 0;
+
+// ---------- state ----------
+const RESPAWN_HOLD = 1;   // seconds the respawn key must be held
+const state = { playing: false, started: false, locked: false, camMode: 'chase', listen: null, swallowClick: false,
+  respawnHold: 0, respawnArmed: true,
+  helpVisible: store.get(KEYS.help, true) !== false };
+const stats = { shots: 0, hits: 0, kills: 0, crashes: 0 };
+const hit = { time: -9, kill: false };
+let simTime = 0;
+
+const heli = {
+  pos: V(), prevPos: V(), vel: V(), q: new THREE.Quaternion(), rate: V(), // rate: x pitch (+nose up), y yaw (+right), z roll (+right)
+  grounded: true, airborne: false, alive: true, respawnAt: 0, touchdownSpeed: 0,
+  gunHeat: 0, overheated: false, gunTimer: 0, rockets: TUNING.rocketCount, rocketTimer: 0, reloadUntil: 0, podSide: 0,
+};
+const drill = {
+  mode: settings.drill,
+  ring: { index: 0, running: false, start: 0, best: store.get(KEYS.best, null) },
+  landing: { target: 1, timerStart: null, hold: 0, last: null },
+};
+
+// ---------- drills ----------
+const fmtTime = s => { const m = Math.floor(s / 60), r = s - m * 60; return `${m}:${r < 10 ? '0' : ''}${r.toFixed(1)}`; };
+const fmtDist = m => m < 1000 ? `${Math.round(m)} m` : `${(m / 1000).toFixed(1)} km`;
+
+function updateRingColors() {
+  const idx = drill.ring.index;
+  RINGS.forEach((r, i) => {
+    r.mesh.visible = i >= idx;
+    const mat = r.mesh.material;
+    if (i === idx) { mat.color.setHex(0xffb547); mat.opacity = 0.95; }
+    else if (i === idx + 1) { mat.color.setHex(0xe8eee4); mat.opacity = 0.5; }
+    else { mat.color.setHex(0xe8eee4); mat.opacity = 0.22; }
+  });
+}
+function resetRingRun() { drill.ring.index = 0; drill.ring.running = false; updateRingColors(); }
+function setDrill(mode) {
+  drill.mode = mode; settings.drill = mode; saveSettings();
+  ringGroup.visible = mode === 'rings';
+  resetRingRun();
+  drill.landing.timerStart = null; drill.landing.hold = 0;
+  $('drill-' + mode).checked = true;
+}
+function ringCrossed(a, b, ring) {
+  const d0 = tmpP.copy(a).sub(ring.center).dot(ring.normal);
+  const d1 = tmpP.copy(b).sub(ring.center).dot(ring.normal);
+  if (d0 * d1 > 0 || d0 === d1) return false;
+  const t = d0 / (d0 - d1);
+  tmpP.copy(a).lerp(b, t);
+  return tmpP.distanceTo(ring.center) < RING_RADIUS - 0.4;
+}
+function ringPassed() {
+  const r = drill.ring;
+  if (r.index === 0) { r.running = true; r.start = simTime; }
+  r.index++;
+  if (r.index >= RINGS.length) {
+    const t = simTime - r.start;
+    const best = r.best == null || t < r.best;
+    if (best) { r.best = t; store.set(KEYS.best, t); }
+    showMessage(best ? 'New best' : 'Course done', `${fmtTime(t)}${best ? '' : ` · best ${fmtTime(r.best)}`}`, best ? 'good' : 'signal', 3.5);
+    r.index = 0; r.running = false;
+  }
+  updateRingColors();
+}
+function onTakeoff() {
+  if (drill.mode === 'landing' && drill.landing.timerStart === null) drill.landing.timerStart = simTime;
+}
+function landingGrade(v) {
+  if (v < 1) return ['Perfect', 'good'];
+  if (v < 2.5) return ['Good', 'good'];
+  if (v < 4.5) return ['Firm', 'signal'];
+  return ['Hard', 'danger'];
+}
+function updateLanding(dt) {
+  const L = drill.landing, pad = PADS[L.target];
+  const d = Math.hypot(heli.pos.x - pad.x, heli.pos.z - pad.z);
+  const onPad = heli.grounded && d < PAD_RADIUS - 2 && Math.abs(heli.pos.y - SKID_DROP - pad.y) < 1;
+  if (!onPad || heli.vel.length() > 1) { L.hold = 0; return; }
+  L.hold += dt;
+  if (L.hold < 1) return;
+  const [grade, tone] = landingGrade(heli.touchdownSpeed);
+  const time = L.timerStart === null ? null : simTime - L.timerStart;
+  L.last = `${pad.name}: ${grade}, ${heli.touchdownSpeed.toFixed(1)} m/s${time === null ? '' : ` in ${fmtTime(time)}`}`;
+  showMessage(`${pad.name} · ${grade}`, `Touch-down ${heli.touchdownSpeed.toFixed(1)} m/s${time === null ? '' : ` · ${fmtTime(time)}`}`, tone, 3.5);
+  L.target = (L.target + 1) % PADS.length;
+  L.timerStart = null; L.hold = 0;
+}
+
+// ---------- helicopter physics ----------
+const fwd = V(), up = V(), right = V(), acc = V(), tmpA = V(), tmpB = V();
+const dq = new THREE.Quaternion(), levelQ = new THREE.Quaternion();
+const capRate = (v, m) => clamp(v, -m, m);
+
+function objectiveFor(mode) {
+  if (mode === 'rings') return RINGS[0].center;
+  if (mode === 'landing') { const p = PADS[drill.landing.target]; return V(p.x, p.y, p.z); }
+  return V(TOWN.x, 0, TOWN.z);
+}
+function respawn() {
+  const pad = PADS[0];
+  heli.pos.set(pad.x, pad.y + SKID_DROP, pad.z);
+  heli.prevPos.copy(heli.pos);
+  heli.vel.set(0, 0, 0); heli.rate.set(0, 0, 0);
+  const goal = objectiveFor(drill.mode);
+  heli.q.setFromAxisAngle(UP, Math.atan2(-(goal.x - pad.x), -(goal.z - pad.z)));
+  Object.assign(heli, { grounded: true, airborne: false, alive: true, touchdownSpeed: 0, gunHeat: 0, overheated: false, gunTimer: 0,
+    rockets: TUNING.rocketCount, rocketTimer: 0, reloadUntil: 0 });
+  heliMesh.visible = state.camMode === 'chase';
+  resetRingRun();
+  drill.landing.timerStart = null; drill.landing.hold = 0;
+  camF.set(0, 0, -1).applyQuaternion(heli.q);
+}
+function crash(reason) {
+  if (!heli.alive) return;
+  heli.alive = false; heli.respawnAt = simTime + 3;
+  heliMesh.visible = false;
+  explosion(heli.pos, true);
+  stats.crashes++;
+  showMessage('Crashed', `${reason} · respawning`, 'danger', 2.8);
+  resetRingRun();
+  drill.landing.timerStart = null;
+}
+
+function stepHeli(h, inp) {
+  heli.prevPos.copy(heli.pos);
+  fwd.set(0, 0, -1).applyQuaternion(heli.q);
+  right.set(1, 0, 0).applyQuaternion(heli.q);
+  const speed = heli.vel.length(), fwdSpeed = heli.vel.dot(fwd), side = heli.vel.dot(right);
+
+  // rotation: inputs set target rates, rates follow with a short lag, attitude holds when input stops
+  let vane = 0;
+  if (fwdSpeed > 4 && !heli.grounded) vane = Math.atan2(side, fwdSpeed) * TUNING.weathervane * Math.min(1, speed / 40);
+  const k = 1 - Math.exp(-TUNING.angularResponse * h);
+  const tp = inp.pitchKey * TUNING.pitchRate + capRate(inp.pitchMouse, TUNING.pitchRate * TUNING.mouseRateCap);
+  const ty = inp.yawKey * TUNING.yawRate + capRate(inp.yawMouse, TUNING.yawRate * TUNING.mouseRateCap) + vane;
+  const tr = inp.rollKey * TUNING.rollRate + capRate(inp.rollMouse, TUNING.rollRate * TUNING.mouseRateCap);
+  heli.rate.x += (tp - heli.rate.x) * k;
+  heli.rate.y += (ty - heli.rate.y) * k;
+  heli.rate.z += (tr - heli.rate.z) * k;
+  tmpA.set(heli.rate.x, -heli.rate.y, -heli.rate.z);
+  const ang = tmpA.length() * h;
+  if (ang > 1e-7) { dq.setFromAxisAngle(tmpA.normalize(), ang); heli.q.multiply(dq).normalize(); }
+
+  // thrust along the rotor axis; tilting turns lift into forward or sideways push
+  up.set(0, 1, 0).applyQuaternion(heli.q);
+  const thr = inp.throttle;
+  let thrust = TUNING.hoverThrust + (thr > 0 ? thr * TUNING.climbThrust : thr * TUNING.descendThrust);
+  thrust *= 1 - smoothstep(TUNING.ceiling - 100, TUNING.ceiling, heli.pos.y);
+  acc.copy(up).multiplyScalar(thrust * G);
+  acc.y -= G;
+  acc.addScaledVector(heli.vel, -(TUNING.dragLinear + TUNING.dragQuad * speed));
+  acc.y -= heli.vel.y * TUNING.dragVertical;
+  acc.addScaledVector(right, -side * TUNING.dragSide);
+  const agl = heli.pos.y - SKID_DROP - groundHeight(heli.pos.x, heli.pos.z);
+  if (agl < TUNING.groundEffectHeight && heli.vel.y < 0) acc.y -= heli.vel.y * TUNING.groundEffectDamping * (1 - Math.max(0, agl) / TUNING.groundEffectHeight);
+  const lim = HALF - 60;
+  if (Math.abs(heli.pos.x) > lim) acc.x -= Math.sign(heli.pos.x) * (Math.abs(heli.pos.x) - lim) * 0.6;
+  if (Math.abs(heli.pos.z) > lim) acc.z -= Math.sign(heli.pos.z) * (Math.abs(heli.pos.z) - lim) * 0.6;
+  heli.vel.addScaledVector(acc, h);
+  heli.pos.addScaledVector(heli.vel, h);
+
+  resolveContacts(h, inp);
+  // airborne only counts from half a metre up, so skids settling on the pad never read as a take-off
+  if (heli.alive && !heli.grounded && !heli.airborne && agl > 0.5) { heli.airborne = true; onTakeoff(); }
+  if (heli.alive && drill.mode === 'rings' && ringCrossed(heli.prevPos, heli.pos, RINGS[drill.ring.index])) ringPassed();
+}
+
+function resolveContacts(h, inp) {
+  let maxPen = -Infinity;
+  for (const p of SKID_POINTS) {
+    tmpA.copy(p).applyQuaternion(heli.q).add(heli.pos);
+    maxPen = Math.max(maxPen, groundHeight(tmpA.x, tmpA.z) - tmpA.y);
+  }
+  heli.grounded = false;
+  if (maxPen > 0) {
+    const vy = heli.vel.y, horiz = Math.hypot(heli.vel.x, heli.vel.z);
+    if (maxPen > 1.5) return crash(buildingAt(heli.pos.x, heli.pos.z) ? 'Flew into a building' : 'Flew into the ground');
+    if (-vy > TUNING.crashVerticalSpeed) return crash(`Hit the ground at ${(-vy).toFixed(1)} m/s`);
+    if (horiz > TUNING.crashHorizontalSpeed) return crash(`Touched down at ${Math.round(horiz * 3.6)} km/h`);
+    if (up.y < TUNING.crashTiltCos) return crash('Landed too tilted');
+    heli.pos.y += maxPen;
+    if (heli.vel.y < 0) heli.vel.y = 0;
+    heli.grounded = true;
+    const f = Math.exp(-4 * h);
+    heli.vel.x *= f; heli.vel.z *= f;
+    if (heli.airborne) { heli.touchdownSpeed = -vy; heli.airborne = false; }
+    if (inp.throttle <= 0) {
+      fwd.set(0, 0, -1).applyQuaternion(heli.q);
+      levelQ.setFromAxisAngle(UP, Math.atan2(-fwd.x, -fwd.z));
+      heli.q.slerp(levelQ, 1 - Math.exp(-5 * h));
+      heli.rate.x *= 0.9; heli.rate.z *= 0.9;
+    }
+  }
+
+  for (const b of BODY_POINTS) {
+    tmpA.copy(b.p).applyQuaternion(heli.q).add(heli.pos);
+    if (groundHeight(tmpA.x, tmpA.z) - tmpA.y > 0.02) return crash(buildingAt(tmpA.x, tmpA.z) ? 'Hit a building' : b.why);
+  }
+  for (const t of trees) {
+    const dx = heli.pos.x - t.x, dz = heli.pos.z - t.z, r = t.r + 5;
+    if (dx * dx + dz * dz < r * r && heli.pos.y - 1.5 < t.top) return crash('Hit a tree');
+  }
+}
+
+// ---------- weapons ----------
+function fireBullet() {
+  const b = bullets[bulletCursor]; bulletCursor = (bulletCursor + 1) % MAX_BULLETS;
+  b.on = true; b.life = 2.5;
+  b.pos.copy(GUN_POS).applyQuaternion(heli.q).add(heli.pos);
+  b.prev.copy(b.pos);
+  tmpA.copy(GUN_DIR).applyQuaternion(heli.q);
+  tmpA.x += (Math.random() * 2 - 1) * TUNING.gunSpread;
+  tmpA.y += (Math.random() * 2 - 1) * TUNING.gunSpread;
+  tmpA.z += (Math.random() * 2 - 1) * TUNING.gunSpread;
+  b.vel.copy(tmpA.normalize()).multiplyScalar(TUNING.bulletSpeed).add(heli.vel);
+  spawnParticle(b.pos, heli.vel, 0.05, 0.4, 0.9, 0xffe2a0, 0.9);
+  stats.shots++;
+}
+function fireRocket() {
+  const r = rockets[rocketCursor]; rocketCursor = (rocketCursor + 1) % rockets.length;
+  heli.podSide ^= 1;
+  r.on = true; r.life = 6; r.smoke = 0;
+  r.pos.copy(POD_POS[heli.podSide]).applyQuaternion(heli.q).add(heli.pos);
+  r.prev.copy(r.pos);
+  r.vel.copy(GUN_DIR).applyQuaternion(heli.q).multiplyScalar(TUNING.rocketSpeed).add(heli.vel);
+  r.mesh.visible = true;
+}
+function updateWeapons(h, inp) {
+  heli.gunHeat = Math.max(0, heli.gunHeat - TUNING.gunCooling * h);
+  if (heli.overheated && heli.gunHeat <= 0) heli.overheated = false;
+  heli.gunTimer = Math.max(0, heli.gunTimer - h);
+  heli.rocketTimer = Math.max(0, heli.rocketTimer - h);
+  if (heli.rockets === 0 && simTime >= heli.reloadUntil) heli.rockets = TUNING.rocketCount;
+  if (!heli.alive) return;
+  if (inp.fire && !heli.overheated && heli.gunTimer <= 0) {
+    fireBullet();
+    heli.gunTimer = 1 / TUNING.gunRate;
+    heli.gunHeat += TUNING.gunHeatPerShot;
+    if (heli.gunHeat >= 1) { heli.gunHeat = 1; heli.overheated = true; }
+  }
+  if (inp.rockets && heli.rockets > 0 && heli.rocketTimer <= 0) {
+    fireRocket();
+    heli.rockets--;
+    heli.rocketTimer = TUNING.rocketInterval;
+    if (heli.rockets === 0) heli.reloadUntil = simTime + TUNING.rocketReload;
+  }
+}
+function segmentHitsSphere(a, b, c, r) {
+  tmpB.copy(b).sub(a);
+  const len2 = tmpB.lengthSq();
+  const t = len2 > 0 ? clamp(tmpP.copy(c).sub(a).dot(tmpB) / len2, 0, 1) : 0;
+  return tmpP.copy(a).addScaledVector(tmpB, t).distanceToSquared(c) <= r * r;
+}
+function damageTarget(t, dmg) {
+  if (!t.alive) return;
+  t.hp -= dmg;
+  hit.time = simTime; hit.kill = false;
+  if (t.hp <= 0) {
+    t.alive = false; t.respawnAt = simTime + TUNING.targetRespawn;
+    setTargetWrecked(t, true);
+    explosion(t.center, true);
+    stats.kills++;
+    hit.kill = true;
+  }
+}
+function rocketBlast(pos) {
+  explosion(pos, false);
+  for (const t of targets) {
+    if (!t.alive) continue;
+    const d = Math.max(0, t.center.distanceTo(pos) - 2);
+    if (d < TUNING.rocketSplash) damageTarget(t, TUNING.rocketDamage * (1 - d / TUNING.rocketSplash));
+  }
+}
+function updateProjectiles(h) {
+  for (const b of bullets) {
+    if (!b.on) continue;
+    b.prev.copy(b.pos);
+    b.vel.y -= G * TUNING.bulletGravity * h;
+    b.pos.addScaledVector(b.vel, h);
+    b.life -= h;
+    for (const t of targets) {
+      if (t.alive && segmentHitsSphere(b.prev, b.pos, t.center, 3.2)) {
+        stats.hits++; damageTarget(t, TUNING.bulletDamage); b.on = false;
+        spawnParticle(b.pos, tmpA.set(0, 2, 0), 0.25, 0.5, 1.4, 0xffe08a, 0.9);
+        break;
+      }
+    }
+    if (b.on && b.pos.y < groundHeight(b.pos.x, b.pos.z)) {
+      b.on = false;
+      spawnParticle(b.pos, tmpA.set(0, 3, 0), 0.7, 0.6, 2.2, 0x8a7a5a, 0.7, 0, 2);
+    }
+    if (b.life <= 0) b.on = false;
+  }
+  for (const r of rockets) {
+    if (!r.on) continue;
+    r.prev.copy(r.pos);
+    r.vel.y -= G * TUNING.rocketGravity * h;
+    r.pos.addScaledVector(r.vel, h);
+    r.life -= h;
+    r.smoke -= h;
+    if (r.smoke <= 0) { r.smoke = 0.025; spawnParticle(r.pos, tmpA.set(0, 0.5, 0), 1.1, 0.5, 2.4, 0x9a968d, 0.45, 0.3, 1); }
+    let boom = r.pos.y < groundHeight(r.pos.x, r.pos.z);
+    for (const t of targets) if (!boom && t.alive && segmentHitsSphere(r.prev, r.pos, t.center, 3.4)) boom = true;
+    if (boom) { rocketBlast(r.pos); r.on = false; }
+    if (r.life <= 0) r.on = false;
+    if (!r.on) r.mesh.visible = false;
+  }
+}
+function syncProjectileMeshes() {
+  let n = 0;
+  for (const b of bullets) {
+    if (!b.on) continue;
+    const o = n * 6;
+    tracerPos[o] = b.pos.x; tracerPos[o + 1] = b.pos.y; tracerPos[o + 2] = b.pos.z;
+    tracerPos[o + 3] = b.pos.x - b.vel.x * 0.03; tracerPos[o + 4] = b.pos.y - b.vel.y * 0.03; tracerPos[o + 5] = b.pos.z - b.vel.z * 0.03;
+    n++;
+  }
+  tracerGeo.setDrawRange(0, n * 2);
+  tracerGeo.attributes.position.needsUpdate = true;
+  for (const r of rockets) {
+    if (!r.on) continue;
+    r.mesh.position.copy(r.pos);
+    r.mesh.quaternion.setFromUnitVectors(ZAXIS, tmpA.copy(r.vel).normalize());
+  }
+}
+
+function updateWorld(dt) {
+  for (const t of targets) {
+    if (!t.alive && simTime >= t.respawnAt) { t.alive = true; t.hp = TUNING.targetHp; setTargetWrecked(t, false); }
+  }
+  if (!heli.alive && simTime >= heli.respawnAt) respawn();
+  if (heli.alive && drill.mode === 'landing') updateLanding(dt);
+}
+
+// ---------- input ----------
+const pressed = new Set();
+let mouseDX = 0, mouseDY = 0;
+const isDown = code => !!code && pressed.has(code);
+function readInput(dt) {
+  const inv = 1 / Math.max(dt, 1 / 240);
+  const mx = mouseDX * inv, my = mouseDY * inv;
+  mouseDX = mouseDY = 0;
+  const inp = {};
+  for (const name in AXES) {
+    const b = bindings[name];
+    let key = 0, mouse = 0;
+    if (b.mode === 'mouse' && AXES[name].mouse) {
+      const v = b.axis === 'x' ? mx : -my;   // mouse right / mouse forward is the positive direction
+      mouse = v * TUNING.mouseRate * settings.sens * (b.invert ? -1 : 1);
+    } else key = (isDown(b.pos) ? 1 : 0) - (isDown(b.neg) ? 1 : 0);
+    inp[name + 'Key'] = key; inp[name + 'Mouse'] = mouse;
+  }
+  inp.throttle = inp.throttleKey;
+  inp.fire = isDown(bindings.fire.code);
+  inp.rockets = isDown(bindings.rockets.code);
+  return inp;
+}
+function boundCodes() {
+  const s = new Set();
+  for (const name in bindings) { const b = bindings[name]; [b.code, b.pos, b.neg].forEach(c => c && s.add(c)); }
+  return s;
+}
+function pressEdge(code) {
+  if (code === bindings.camera.code) toggleCamera();
+  if (code === bindings.help.code) setHelp(!state.helpVisible);
+}
+
+function requestLock() {
+  if (!glCanvas.requestPointerLock) return;
+  try { const p = glCanvas.requestPointerLock(); if (p && p.catch) p.catch(() => {}); } catch (e) { /* stays unlocked; the hint asks for a click */ }
+}
+document.addEventListener('pointerlockchange', () => {
+  state.locked = document.pointerLockElement === glCanvas;
+  if (!state.locked && state.playing) openMenu();
+});
+
+window.addEventListener('keydown', e => {
+  if (state.listen) { e.preventDefault(); finishListen(e.code === 'Escape' ? undefined : (e.code === 'Delete' || e.code === 'Backspace') ? null : e.code); return; }
+  if (!state.playing) return;
+  if (e.code === 'Escape') { openMenu(); return; }
+  if (boundCodes().has(e.code)) e.preventDefault();
+  pressed.add(e.code);
+  if (!e.repeat) pressEdge(e.code);
+});
+window.addEventListener('keyup', e => { pressed.delete(e.code); });
+window.addEventListener('mousedown', e => {
+  const code = 'Mouse' + e.button;
+  if (state.listen) { e.preventDefault(); state.swallowClick = true; finishListen(code); return; }
+  if (!state.playing) return;
+  if (!state.locked && e.target === glCanvas) requestLock();
+  if (e.button > 2) e.preventDefault();
+  pressed.add(code);
+  pressEdge(code);
+});
+window.addEventListener('mouseup', e => { pressed.delete('Mouse' + e.button); if (e.button > 2) e.preventDefault(); });
+window.addEventListener('click', e => { if (state.swallowClick) { state.swallowClick = false; e.stopPropagation(); e.preventDefault(); } }, true);
+window.addEventListener('mousemove', e => { if (state.playing) { mouseDX += e.movementX || 0; mouseDY += e.movementY || 0; } });
+window.addEventListener('contextmenu', e => e.preventDefault());
+window.addEventListener('blur', () => pressed.clear());
+document.addEventListener('visibilitychange', () => { if (document.hidden && state.playing) openMenu(); });
+
+// holding the respawn key fills a ring; it fires once per press
+function updateRespawnHold(dt) {
+  if (!isDown(bindings.respawn.code)) { state.respawnHold = 0; state.respawnArmed = true; return; }
+  if (!state.respawnArmed) return;
+  state.respawnHold += dt;
+  if (state.respawnHold >= RESPAWN_HOLD) { respawn(); state.respawnHold = 0; state.respawnArmed = false; }
+}
+
+// ---------- camera ----------
+const camF = V(0, 0, -1), camUp = V();
+function toggleCamera() {
+  state.camMode = state.camMode === 'chase' ? 'cockpit' : 'chase';
+  heliMesh.visible = heli.alive && state.camMode === 'chase';
+}
+function updateCamera(dt) {
+  if (!heli.alive) { camera.lookAt(heli.pos); return; }
+  fwd.set(0, 0, -1).applyQuaternion(heli.q);
+  up.set(0, 1, 0).applyQuaternion(heli.q);
+  if (state.camMode === 'cockpit') {
+    camera.position.copy(tmpA.set(0, 0.7, -2.4).applyQuaternion(heli.q).add(heli.pos));
+    camera.quaternion.copy(heli.q);
+    camF.copy(fwd);
+    return;
+  }
+  camF.lerp(fwd, 1 - Math.exp(-TUNING.chaseLag * dt)).normalize();
+  camUp.copy(up).multiplyScalar(0.25).addScaledVector(UP, 0.75).normalize();
+  camera.position.copy(heli.pos).addScaledVector(camF, -TUNING.chaseDistance).addScaledVector(UP, TUNING.chaseHeight);
+  camera.position.y = Math.max(camera.position.y, groundHeight(camera.position.x, camera.position.z) + 1.5);
+  camera.up.copy(camUp);
+  camera.lookAt(tmpA.copy(heli.pos).addScaledVector(camF, 20).addScaledVector(UP, 1.5));
+}
+
+// ---------- HUD ----------
+const hudCanvas = $('hud'), hctx = hudCanvas.getContext('2d');
+const attCanvas = $('att'), actx = attCanvas.getContext('2d');
+let hudDpr = 1;
+const css = getComputedStyle(document.documentElement);
+const C = ['ink', 'muted', 'signal', 'danger', 'good'].reduce((o, k) => { o[k] = css.getPropertyValue('--' + k).trim(); return o; }, {});
+const CARD = { 0: 'N', 45: 'NE', 90: 'E', 135: 'SE', 180: 'S', 225: 'SW', 270: 'W', 315: 'NW' };
+const projV = V();
+function project(world, W, H) {
+  projV.copy(world).applyMatrix4(camera.matrixWorldInverse);
+  const behind = projV.z > 0;
+  projV.applyMatrix4(camera.projectionMatrix);
+  let x = projV.x, y = projV.y;
+  if (behind) { x = -x; y = -y; }
+  return { x: (x * 0.5 + 0.5) * W, y: (-y * 0.5 + 0.5) * H, on: !behind && Math.abs(x) <= 1 && Math.abs(y) <= 1 };
+}
+const headingDeg = () => { fwd.set(0, 0, -1).applyQuaternion(heli.q); return (Math.atan2(fwd.x, -fwd.z) * 180 / Math.PI + 360) % 360; };
+
+function drawHeading(cx, y) {
+  const hdg = headingDeg(), ppd = 4, span = 45;
+  hctx.font = '500 12px "IBM Plex Mono", Consolas, monospace';
+  hctx.textAlign = 'center'; hctx.textBaseline = 'top';
+  hctx.strokeStyle = C.ink; hctx.fillStyle = C.ink; hctx.lineWidth = 1.5;
+  for (let d = Math.ceil((hdg - span) / 5) * 5; d <= hdg + span; d += 5) {
+    const x = cx + (d - hdg) * ppd, nd = ((d % 360) + 360) % 360;
+    hctx.globalAlpha = Math.max(0, 1 - Math.abs(d - hdg) / span);
+    hctx.beginPath(); hctx.moveTo(x, y); hctx.lineTo(x, y + (nd % 15 === 0 ? 9 : 5)); hctx.stroke();
+    if (nd % 15 === 0) hctx.fillText(CARD[nd] || String(nd).padStart(3, '0'), x, y + 12);
+  }
+  hctx.globalAlpha = 1;
+  hctx.fillStyle = C.signal;
+  hctx.beginPath(); hctx.moveTo(cx - 5, y - 8); hctx.lineTo(cx + 5, y - 8); hctx.lineTo(cx, y - 2); hctx.fill();
+  hctx.font = '500 15px "IBM Plex Mono", Consolas, monospace';
+  hctx.fillText(String(Math.round(hdg) % 360).padStart(3, '0'), cx, y + 30);
+}
+function drawCrosshair(W, H) {
+  tmpB.copy(GUN_DIR).applyQuaternion(heli.q);
+  tmpA.copy(GUN_POS).applyQuaternion(heli.q).add(heli.pos).addScaledVector(tmpB, 300);
+  const p = project(tmpA, W, H);
+  if (!p.on) return;
+  hctx.strokeStyle = heli.overheated ? C.danger : C.ink;
+  hctx.fillStyle = hctx.strokeStyle;
+  hctx.lineWidth = 2;
+  for (let k = 0; k < 4; k++) {
+    hctx.beginPath(); hctx.arc(p.x, p.y, 14, k * Math.PI / 2 + 0.35, (k + 1) * Math.PI / 2 - 0.35); hctx.stroke();
+  }
+  hctx.beginPath(); hctx.arc(p.x, p.y, 1.8, 0, Math.PI * 2); hctx.fill();
+  const age = simTime - hit.time;
+  if (age < (hit.kill ? 0.45 : 0.15)) {
+    hctx.strokeStyle = hit.kill ? C.danger : '#ffffff';
+    hctx.lineWidth = 2.5;
+    for (const [sx, sy] of [[1, 1], [1, -1], [-1, 1], [-1, -1]]) {
+      hctx.beginPath(); hctx.moveTo(p.x + sx * 7, p.y + sy * 7); hctx.lineTo(p.x + sx * 15, p.y + sy * 15); hctx.stroke();
+    }
+  }
+}
+function drawEdgeArrow(p, W, H, color, label) {
+  const cx = W / 2, cy = H / 2;
+  let dx = p.x - cx, dy = p.y - cy;
+  if (Math.abs(dx) < 1e-3 && Math.abs(dy) < 1e-3) dy = 1;
+  const m = 56, s = Math.min((cx - m) / Math.max(Math.abs(dx), 1e-6), (cy - m) / Math.max(Math.abs(dy), 1e-6));
+  const x = cx + dx * s, y = cy + dy * s, a = Math.atan2(dy, dx);
+  hctx.save(); hctx.translate(x, y); hctx.rotate(a);
+  hctx.fillStyle = color;
+  hctx.beginPath(); hctx.moveTo(14, 0); hctx.lineTo(-6, -9); hctx.lineTo(-6, 9); hctx.fill();
+  hctx.restore();
+  hctx.fillStyle = color; hctx.textAlign = 'center'; hctx.textBaseline = 'middle';
+  hctx.fillText(label, x - Math.cos(a) * 30, y - Math.sin(a) * 22);
+}
+function drawObjective(world, W, H, label) {
+  const p = project(world, W, H);
+  hctx.font = '500 13px "IBM Plex Mono", Consolas, monospace';
+  if (!p.on) return drawEdgeArrow(p, W, H, C.signal, label);
+  hctx.strokeStyle = C.signal; hctx.lineWidth = 2;
+  hctx.beginPath(); hctx.moveTo(p.x, p.y - 10); hctx.lineTo(p.x + 10, p.y); hctx.lineTo(p.x, p.y + 10); hctx.lineTo(p.x - 10, p.y); hctx.closePath(); hctx.stroke();
+  hctx.fillStyle = C.signal; hctx.textAlign = 'center'; hctx.textBaseline = 'top';
+  hctx.fillText(label, p.x, p.y + 15);
+}
+function drawMarkers(W, H) {
+  if (drill.mode === 'free') {
+    hctx.fillStyle = C.danger;
+    for (const t of targets) {
+      if (!t.alive || t.center.distanceTo(heli.pos) > 1100) continue;
+      const p = project(tmpA.copy(t.center).setY(t.center.y + 4.5), W, H);
+      if (!p.on) continue;
+      hctx.beginPath(); hctx.moveTo(p.x - 7, p.y - 8); hctx.lineTo(p.x + 7, p.y - 8); hctx.lineTo(p.x, p.y); hctx.fill();
+    }
+  } else if (drill.mode === 'rings') {
+    const r = RINGS[drill.ring.index];
+    drawObjective(r.center, W, H, `${drill.ring.index + 1} · ${fmtDist(r.center.distanceTo(heli.pos))}`);
+  } else {
+    const pad = PADS[drill.landing.target];
+    tmpB.set(pad.x, pad.y + 1, pad.z);
+    drawObjective(tmpB, W, H, `${pad.label} · ${fmtDist(tmpB.distanceTo(heli.pos))}`);
+  }
+}
+function drawRespawnHold(W, H) {
+  const x = W / 2, y = H * 0.7, k = Math.min(1, state.respawnHold / RESPAWN_HOLD);
+  hctx.lineWidth = 4;
+  hctx.strokeStyle = 'rgba(232,238,228,.25)';
+  hctx.beginPath(); hctx.arc(x, y, 20, 0, Math.PI * 2); hctx.stroke();
+  hctx.strokeStyle = C.signal;
+  hctx.beginPath(); hctx.arc(x, y, 20, -Math.PI / 2, -Math.PI / 2 + k * Math.PI * 2); hctx.stroke();
+  hctx.fillStyle = C.ink; hctx.textAlign = 'center'; hctx.textBaseline = 'top';
+  hctx.font = '500 13px "IBM Plex Mono", Consolas, monospace';
+  hctx.fillText(`Hold ${keyName(bindings.respawn.code)} to respawn on the pad`, x, y + 30);
+}
+function drawAttitude(pitchDeg, roll) {
+  const s = attCanvas.width, r = s * 0.46, k = s / 112;
+  actx.setTransform(1, 0, 0, 1, 0, 0);
+  actx.clearRect(0, 0, s, s);
+  actx.save();
+  actx.translate(s / 2, s / 2);
+  actx.beginPath(); actx.arc(0, 0, r, 0, Math.PI * 2); actx.clip();
+  actx.rotate(-roll);
+  const off = clamp(pitchDeg, -60, 60) * 1.6 * k;
+  actx.fillStyle = 'rgba(86,140,190,.55)'; actx.fillRect(-s, -s * 2 + off, s * 2, s * 2);
+  actx.fillStyle = 'rgba(128,96,60,.6)'; actx.fillRect(-s, off, s * 2, s * 2);
+  actx.strokeStyle = C.ink; actx.lineWidth = 1.5 * k;
+  actx.beginPath(); actx.moveTo(-s, off); actx.lineTo(s, off); actx.stroke();
+  actx.lineWidth = 1 * k;
+  for (const p of [-20, -10, 10, 20]) {
+    const y = off - p * 1.6 * k, w = (p % 20 === 0 ? 18 : 10) * k;
+    actx.beginPath(); actx.moveTo(-w, y); actx.lineTo(w, y); actx.stroke();
+  }
+  actx.restore();
+  actx.save(); actx.translate(s / 2, s / 2);
+  actx.strokeStyle = C.signal; actx.lineWidth = 2.5 * k;
+  actx.beginPath(); actx.moveTo(-24 * k, 0); actx.lineTo(-8 * k, 0); actx.lineTo(0, 6 * k); actx.lineTo(8 * k, 0); actx.lineTo(24 * k, 0); actx.stroke();
+  actx.strokeStyle = 'rgba(232,238,228,.45)'; actx.lineWidth = 1.5 * k;
+  actx.beginPath(); actx.arc(0, 0, r, 0, Math.PI * 2); actx.stroke();
+  actx.restore();
+}
+
+const textCache = new Map();
+function setText(id, text) { if (textCache.get(id) !== text) { textCache.set(id, text); $(id).textContent = text; } }
+const elColl = $('g-coll'), elGunBar = $('b-gun'), elGunFill = elGunBar.firstElementChild, elRktFill = $('b-rkt').firstElementChild;
+let lastThrottle = 0;
+
+function updateHud() {
+  const W = innerWidth, H = innerHeight;
+  hctx.setTransform(hudDpr, 0, 0, hudDpr, 0, 0);
+  hctx.clearRect(0, 0, W, H);
+  hctx.lineCap = 'round';
+  hctx.shadowColor = 'rgba(0,0,0,.55)'; hctx.shadowBlur = 3;
+  drawHeading(W / 2, 22);
+  if (heli.alive) { drawCrosshair(W, H); drawMarkers(W, H); }
+  if (state.respawnHold > 0) drawRespawnHold(W, H);
+  hctx.shadowBlur = 0;
+
+  fwd.set(0, 0, -1).applyQuaternion(heli.q);
+  right.set(1, 0, 0).applyQuaternion(heli.q);
+  up.set(0, 1, 0).applyQuaternion(heli.q);
+  drawAttitude(Math.asin(clamp(fwd.y, -1, 1)) * 180 / Math.PI, Math.atan2(-right.y, up.y));
+
+  const agl = Math.max(0, heli.pos.y - SKID_DROP - groundHeight(heli.pos.x, heli.pos.z));
+  setText('g-alt', String(Math.round(agl)));
+  setText('g-spd', String(Math.round(heli.vel.length() * 3.6)));
+  const vs = heli.vel.y;
+  setText('g-vs', `${vs >= 0 ? '+' : '−'}${Math.abs(vs).toFixed(1)}`);
+  const thr = lastThrottle;
+  elColl.style.top = thr > 0 ? `${50 - thr * 50}%` : '50%';
+  elColl.style.height = `${Math.abs(thr) * 50}%`;
+
+  elGunFill.style.width = `${heli.gunHeat * 100}%`;
+  elGunBar.classList.toggle('hot', heli.overheated);
+  setText('v-gun', heli.overheated ? 'HOT' : `${Math.round(heli.gunHeat * 100)}%`);
+  if (heli.rockets === 0) {
+    const left = Math.max(0, heli.reloadUntil - simTime);
+    elRktFill.style.width = `${(1 - left / TUNING.rocketReload) * 100}%`;
+    setText('v-rkt', `${left.toFixed(1)}s`);
+  } else {
+    elRktFill.style.width = `${heli.rockets / TUNING.rocketCount * 100}%`;
+    setText('v-rkt', String(heli.rockets));
+  }
+  setText('s-kills', String(stats.kills));
+  setText('s-acc', stats.shots ? `${Math.round(stats.hits / stats.shots * 100)}%` : '–');
+  setText('s-crash', String(stats.crashes));
+
+  if (drill.mode === 'free') {
+    setText('drill-name', 'Free flight');
+    setText('drill-main', `${stats.kills} destroyed`);
+    setText('drill-sub', 'Red markers show the targets. Land anywhere, or respawn on the home pad.');
+  } else if (drill.mode === 'rings') {
+    const r = drill.ring;
+    setText('drill-name', 'Ring course');
+    setText('drill-main', `Ring ${r.index + 1} / ${RINGS.length} · ${r.running ? fmtTime(simTime - r.start) : '0:00.0'}`);
+    setText('drill-sub', (r.running ? '' : 'Fly through the amber ring to start the clock. ') + (r.best != null ? `Best ${fmtTime(r.best)}` : 'No best time yet'));
+  } else {
+    const L = drill.landing, pad = PADS[L.target];
+    setText('drill-name', 'Landing drill');
+    setText('drill-main', `Land on ${pad.name}`);
+    const timer = L.timerStart === null ? 'clock starts at take-off' : fmtTime(simTime - L.timerStart);
+    setText('drill-sub', `${fmtDist(Math.hypot(heli.pos.x - pad.x, heli.pos.z - pad.z))} · ${timer}${L.last ? ` — last: ${L.last}` : ''}`);
+  }
+  $('lock-hint').hidden = !(state.playing && !state.locked && !!glCanvas.requestPointerLock);
+}
+
+let msgTimer = 0;
+function showMessage(title, sub, tone, seconds) {
+  const el = $('msg');
+  setText('msg-title', title); setText('msg-sub', sub || '');
+  el.className = 'hud show ' + (tone || '');
+  clearTimeout(msgTimer);
+  msgTimer = setTimeout(() => el.classList.remove('show'), seconds * 1000);
+}
+
+// ---------- help, summary, menu ----------
+function controlRows() {
+  return [...Object.keys(AXES), ...Object.keys(BUTTONS)].map(n => [(AXES[n] || BUTTONS[n]).label, bindingText(n)]);
+}
+function renderHelp() {
+  const fill = (dl, rows) => { dl.replaceChildren(...rows.flatMap(([a, b]) => { const dt = document.createElement('dt'), dd = document.createElement('dd'); dt.textContent = a; dd.textContent = b; return [dt, dd]; })); };
+  fill($('help-list'), [...controlRows(), ['Pause', 'Esc']]);
+  $('help-key').textContent = `${keyName(bindings.help.code)} hides`;
+  const summary = $('summary');
+  summary.replaceChildren(...controlRows().map(([a, b]) => {
+    const div = document.createElement('div'), dt = document.createElement('dt'), dd = document.createElement('dd');
+    dt.textContent = a; dd.textContent = b; div.append(dt, dd); return div;
+  }));
+}
+function setHelp(visible) { state.helpVisible = visible; store.set(KEYS.help, visible); $('help').hidden = !visible; }
+
+function conflicts() {
+  const users = new Map();
+  const note = (key, name) => { if (!users.has(key)) users.set(key, new Set()); users.get(key).add(name); };
+  for (const name in bindings) {
+    const b = bindings[name];
+    if (AXES[name]) {
+      if (b.mode === 'mouse') note('axis:' + b.axis, name);
+      else { b.pos && note(b.pos, name); b.neg && note(b.neg, name); }
+    } else if (b.code) note(b.code, name);
+  }
+  const out = {};
+  for (const set of users.values()) if (set.size > 1) for (const n of set) {
+    out[n] = [...new Set([...(out[n] || []), ...[...set].filter(o => o !== n)])];
+  }
+  return out;
+}
+const labelOf = n => (AXES[n] || BUTTONS[n]).label;
+
+function renderBindings() {
+  const list = $('bind-list'), clash = conflicts();
+  const rows = [];
+  const keyBtn = (name, slot, code) => {
+    const listening = state.listen && state.listen.name === name && state.listen.slot === slot;
+    return `<button class="key${listening ? ' listening' : ''}" data-name="${name}" data-slot="${slot}" id="key-${name}-${slot}">${listening ? 'Press…' : keyName(code)}</button>`;
+  };
+  for (const [name, meta] of Object.entries(AXES)) {
+    const b = bindings[name];
+    let ctl = '';
+    if (meta.mouse) {
+      const modes = [['keys', 'Keys'], ['mouse-x', 'Mouse X'], ['mouse-y', 'Mouse Y']];
+      const cur = b.mode === 'mouse' ? 'mouse-' + b.axis : 'keys';
+      ctl += `<div class="seg" role="group" aria-label="${meta.label} input">${modes.map(([m, l]) => `<button data-name="${name}" data-mode="${m}" aria-pressed="${cur === m}" id="mode-${name}-${m}">${l}</button>`).join('')}</div>`;
+    }
+    if (b.mode === 'mouse' && meta.mouse) {
+      ctl += `<label class="chk"><input type="checkbox" id="inv-${name}" data-name="${name}" data-invert ${b.invert ? 'checked' : ''}> Invert</label>`;
+    } else {
+      ctl += meta.order.map(s => `<span class="slot"><span class="dir">${meta[s]}</span>${keyBtn(name, s, b[s])}</span>`).join('');
+    }
+    rows.push(`<div class="bind-row"><div class="bind-name">${meta.label}</div><div class="bind-ctl">${ctl}</div>${clash[name] ? `<div class="warn">Also used by ${clash[name].map(labelOf).join(', ')}</div>` : ''}</div>`);
+  }
+  for (const [name, meta] of Object.entries(BUTTONS)) {
+    rows.push(`<div class="bind-row"><div class="bind-name">${meta.label}</div><div class="bind-ctl">${keyBtn(name, 'code', bindings[name].code)}</div>${clash[name] ? `<div class="warn">Also used by ${clash[name].map(labelOf).join(', ')}</div>` : ''}</div>`);
+  }
+  list.innerHTML = rows.join('');
+}
+function bindingsChanged() { saveBindings(); renderBindings(); renderHelp(); }
+function finishListen(code) {
+  const L = state.listen;
+  state.listen = null;
+  if (L && code !== undefined) bindings[L.name][L.slot] = code;
+  bindingsChanged();
+}
+function cancelListen() { if (state.listen) { state.listen = null; renderBindings(); } }
+
+$('bind-list').addEventListener('click', e => {
+  const t = e.target.closest('button, input');
+  if (!t) return;
+  const name = t.dataset.name;
+  if (t.dataset.slot) { state.listen = { name, slot: t.dataset.slot }; renderBindings(); return; }
+  if (t.dataset.mode) {
+    const b = bindings[name];
+    if (t.dataset.mode === 'keys') b.mode = 'keys'; else { b.mode = 'mouse'; b.axis = t.dataset.mode.slice(6); }
+    bindingsChanged();
+    return;
+  }
+  if ('invert' in t.dataset) { bindings[name].invert = t.checked; bindingsChanged(); }
+});
+$('btn-reset').addEventListener('click', () => { bindings = copyDefaults(); state.listen = null; bindingsChanged(); });
+
+function selectTab(id) {
+  for (const t of ['fly', 'controls', 'settings']) {
+    $('tab-' + t).setAttribute('aria-selected', String(t === id));
+    $('pane-' + t).hidden = t !== id;
+  }
+  if (id !== 'controls') cancelListen();
+}
+['fly', 'controls', 'settings'].forEach(t => $('tab-' + t).addEventListener('click', () => selectTab(t)));
+document.querySelectorAll('input[name="drill"]').forEach(r => r.addEventListener('change', () => { setDrill(r.value); respawn(); }));
+
+const sens = $('sens'), scaleSel = $('scale');
+sens.value = settings.sens; $('sens-out').textContent = settings.sens.toFixed(2);
+sens.addEventListener('input', () => { settings.sens = Number(sens.value); $('sens-out').textContent = settings.sens.toFixed(2); saveSettings(); });
+scaleSel.value = String(settings.scale);
+scaleSel.addEventListener('change', () => { settings.scale = Number(scaleSel.value); saveSettings(); resize(); });
+const shadowSel = $('shadows');
+shadowSel.value = settings.shadows ? 'on' : 'off';
+sun.castShadow = settings.shadows;
+shadowSel.addEventListener('change', () => { settings.shadows = shadowSel.value === 'on'; sun.castShadow = settings.shadows; saveSettings(); });
+
+function updateMenuState() {
+  const agl = Math.max(0, heli.pos.y - SKID_DROP - groundHeight(heli.pos.x, heli.pos.z));
+  $('menu-state').textContent = !heli.alive ? 'Respawning' : heli.grounded ? `On the ground · ${Math.round(heli.vel.length() * 3.6)} km/h` : `Airborne · ${Math.round(agl)} m AGL`;
+  $('btn-fly').textContent = state.started ? 'Resume' : 'Fly';
+}
+function openMenu() {
+  state.playing = false;
+  pressed.clear(); mouseDX = mouseDY = 0;
+  if (document.pointerLockElement) document.exitPointerLock();
+  updateMenuState();
+  $('menu').hidden = false;
+}
+function closeMenu() {
+  cancelListen();
+  $('menu').hidden = true;
+  state.playing = true; state.started = true;
+  requestLock();
+}
+$('btn-fly').addEventListener('click', closeMenu);
+$('btn-respawn').addEventListener('click', () => { respawn(); closeMenu(); });
+if (matchMedia('(pointer: coarse)').matches && !matchMedia('(any-pointer: fine)').matches) $('coarse-note').hidden = false;
+
+// ---------- frame loop ----------
+function resize() {
+  const W = innerWidth, H = innerHeight;
+  renderer.setPixelRatio(Math.min(devicePixelRatio || 1, 2) * settings.scale);
+  renderer.setSize(W, H, false);
+  camera.aspect = W / H; camera.updateProjectionMatrix();
+  hudDpr = Math.min(devicePixelRatio || 1, 2);
+  hudCanvas.width = Math.round(W * hudDpr); hudCanvas.height = Math.round(H * hudDpr);
+}
+window.addEventListener('resize', resize);
+
+let last = performance.now(), fps = 60, fpsShown = 0;
+const STEP = 1 / 120;
+function frame(now) {
+  requestAnimationFrame(frame);
+  let dt = (now - last) / 1000; last = now;
+  if (!(dt > 0)) dt = STEP;
+  fps += (1 / dt - fps) * 0.05;
+  if (dt > 0.05) dt = 0.05;
+  if (now - fpsShown > 500) { fpsShown = now; $('fps').textContent = `${Math.round(fps)} fps`; }
+
+  if (state.playing) {
+    const inp = readInput(dt);
+    lastThrottle = inp.throttle;
+    const n = Math.ceil(dt / STEP - 1e-6), h = dt / n;
+    for (let i = 0; i < n; i++) {
+      simTime += h;
+      if (heli.alive) stepHeli(h, inp);
+      updateWeapons(h, inp);
+      updateProjectiles(h);
+    }
+    updateWorld(dt);
+    updateParticles(dt);
+    updateRespawnHold(dt);
+  } else lastThrottle = 0;
+
+  heliMesh.position.copy(heli.pos);
+  heliMesh.quaternion.copy(heli.q);
+  mainRotor.rotation.y += 28 * dt;
+  tailRotor.rotation.x += 42 * dt;
+  syncProjectileMeshes();
+  updateCamera(dt);
+  sky.position.copy(camera.position);
+  updateSun();
+  renderer.render(scene, camera);
+  updateHud();
+}
+
+// ---------- start ----------
+function snapshot() {
+  return {
+    heli: heli.alive ? { pos: heli.pos.toArray(), vel: heli.vel.toArray(), q: heli.q.toArray(), grounded: heli.grounded } : null,
+    stats: { ...stats }, camMode: state.camMode,
+  };
+}
+function start(data) {
+  data = data || {};
+  resize();
+  setDrill(drill.mode);
+  respawn();
+  if (data.stats) Object.assign(stats, data.stats);
+  if (data.camMode === 'cockpit') toggleCamera();
+  if (data.heli) {
+    heli.pos.fromArray(data.heli.pos); heli.prevPos.copy(heli.pos);
+    heli.vel.fromArray(data.heli.vel); heli.q.fromArray(data.heli.q); heli.grounded = !!data.heli.grounded;
+    camF.set(0, 0, -1).applyQuaternion(heli.q);
+  }
+  renderHelp(); renderBindings(); setHelp(state.helpVisible);
+  updateMenuState();
+  requestAnimationFrame(t => { last = t; frame(t); });
+}
+const hot = window.claude && window.claude.hot;
+if (hot && hot.snapshot) hot.snapshot(snapshot);
+if (hot && hot.ready) hot.ready(start); else start((hot && hot.data) || {});
+</script>
