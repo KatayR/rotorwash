@@ -356,19 +356,19 @@ function fbm(x, z, octaves) {
 }
 
 // ---------- world layout ----------
-const WORLD = 2000, HALF = WORLD / 2, N = 200, CELL = WORLD / N, ROW = N + 1;
-const TOWN = { x: 260, z: 150 };
+const WORLD = 3000, HALF = WORLD / 2, N = 300, CELL = WORLD / N, ROW = N + 1;
+const TOWN = { x: 390, z: 225 };
 const PADS = [
-  { name: 'Home pad', label: 'HOME', x: 0, z: 350 },
-  { name: 'Pad A', label: 'A', x: -520, z: -180 },
-  { name: 'Pad B', label: 'B', x: 430, z: -470 },
+  { name: 'Home pad', label: 'HOME', x: 0, z: 525 },
+  { name: 'Pad A', label: 'A', x: -780, z: -270 },
+  { name: 'Pad B', label: 'B', x: 645, z: -705 },
   { name: 'Rooftop C', label: 'C', x: TOWN.x, z: TOWN.z, roof: true },
 ];
 const PAD_RADIUS = 12;
-const TARGET_SPOTS = [[-260, 110], [-232, 136], [-286, 150], [120, -230], [150, -204], [94, -196],
-  [-120, -420], [-88, -446], [-152, -442], [-400, -40], [-432, -10], [-378, 4]];
-const RING_PATH = [[0, 250, 18], [60, 110, 24], [200, 30, 22], [340, 170, 20], [430, -120, 28],
-  [250, -380, 24], [-60, -470, 34], [-360, -300, 24], [-470, 40, 28], [-220, 260, 20]];
+const TARGET_SPOTS = [[-390, 165], [-348, 204], [-429, 225], [180, -345], [225, -306], [141, -294],
+  [-180, -630], [-132, -669], [-228, -663], [-600, -60], [-648, -15], [-567, 6]];
+const RING_PATH = [[0, 375, 18], [90, 165, 24], [300, 45, 22], [510, 255, 20], [645, -180, 28],
+  [375, -570, 24], [-90, -705, 34], [-540, -450, 24], [-705, 60, 28], [-330, 390, 20]];
 
 function rawHeight(x, z) {
   const n = fbm(x * 0.0026, z * 0.0026, 5);
@@ -419,7 +419,7 @@ const renderer = new THREE.WebGLRenderer({ canvas: glCanvas, antialias: true, po
 const scene = new THREE.Scene();
 const HORIZON = new THREE.Color(0xc6d4da), ZENITH = new THREE.Color(0x5f8fb8);
 scene.background = HORIZON.clone();
-scene.fog = new THREE.Fog(HORIZON.getHex(), 380, 1650);
+scene.fog = new THREE.Fog(HORIZON.getHex(), 450, 1900);
 const camera = new THREE.PerspectiveCamera(TUNING.fov, 1, 0.5, 3400);
 // sky fill kept low enough that shadows read; overall brightness matches the shadow-free version
 scene.add(new THREE.HemisphereLight(0xdfe9f2, 0x5b5140, 0.55));
@@ -641,8 +641,8 @@ function setTargetWrecked(t, wrecked) {
 // trees (one instanced mesh)
 const trees = (() => {
   const list = [], rng = mulberry32(99);
-  for (let tries = 0; list.length < 600 && tries < 8000; tries++) {
-    const x = (rng() * 2 - 1) * 900, z = (rng() * 2 - 1) * 900, h = terrainHeight(x, z);
+  for (let tries = 0; list.length < 1350 && tries < 18000; tries++) {
+    const x = (rng() * 2 - 1) * (HALF - 100), z = (rng() * 2 - 1) * (HALF - 100), h = terrainHeight(x, z);
     if (h > 185) continue;
     if (Math.abs(terrainHeight(x + 4, z) - h) + Math.abs(terrainHeight(x, z + 4) - h) > 2.6) continue;
     if (Math.hypot(x - TOWN.x, z - TOWN.z) < 270) continue;
