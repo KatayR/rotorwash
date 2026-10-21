@@ -693,8 +693,9 @@ const RINGS = (() => {
     return V(x, top + agl, z);
   });
   return centres.map((c, i) => {
-    const prev = centres[Math.max(0, i - 1)], next = centres[Math.min(centres.length - 1, i + 1)];
-    const dir = (i === 0 ? next.clone().sub(c) : next.clone().sub(prev)).setY(0).normalize();
+    // each ring faces the leg that leads into it (the first one faces the home pad)
+    const from = i === 0 ? V(PADS[0].x, 0, PADS[0].z) : centres[i - 1];
+    const dir = c.clone().sub(from).setY(0).normalize();
     const mesh = new THREE.Mesh(geo, new THREE.MeshBasicMaterial({ color: 0xe8eee4, transparent: true, opacity: 0.25 }));
     mesh.position.copy(c);
     mesh.lookAt(c.clone().add(dir));
