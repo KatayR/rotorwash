@@ -32,7 +32,7 @@ All of these can be rebound in the menu's **Controls** tab. Pitch, roll and yaw 
 Pick one on the menu's **Fly** tab.
 
 - **Battlefield:** throttle is momentary. Hold it to climb or sink, and let go to settle into a slow sink.
-- **More realistic:** throttle moves a collective lever that stays where it is left. Rotor thrust lags the lever, power changes yaw the nose through main-rotor torque, there is translational lift at speed, and the helicopter carries more momentum. Its constants are in the `REALISTIC` object.
+- **More realistic:** throttle moves a collective lever gradually, and the lever eases back to the middle (a slow sink) when both keys are released. Rotor thrust lags the lever, power changes yaw the nose through main-rotor torque, there is translational lift at speed, and the helicopter carries more momentum. Its constants are in the `REALISTIC` object.
 
 ## World
 

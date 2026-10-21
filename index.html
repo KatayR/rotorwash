@@ -251,12 +251,13 @@ const TUNING = {
 
 // "More realistic" flight model: used instead of the matching TUNING values when it is selected.
 const REALISTIC = {
-  maxThrust: 1.9,          // thrust in g at full collective; hover sits near 0.53
-  collectiveRate: 0.45,    // lever travel per second while W or S is held; the lever stays where it is left
+  maxThrust: 1.9,          // thrust in g at full collective; the centred lever (0.5) gives 0.95 g, a slow sink like Battlefield
+  collectiveRate: 0.45,    // lever travel per second while W or S is held
+  collectiveReturn: 0.45,  // lever travel per second back to the centre once both are released
   spoolTime: 0.6,          // seconds for rotor thrust to follow the lever
   translationalLift: 0.08, // extra lift once moving faster than about 30-80 km/h
   torqueYaw: 0.5,          // rad/s of nose swing per unit of power away from the hover setting
-  torqueNeutral: 0.53,     // power level the tail rotor is trimmed for
+  torqueNeutral: 0.5,      // lever position the tail rotor is trimmed for (the centre)
   dragVertical: 0.25,      // less damping, so climbs and sinks carry momentum
   angularResponse: 3.5,    // slower to start and stop rotating
   rateScale: 0.8,
@@ -830,7 +831,7 @@ let simTime = 0;
 const heli = {
   pos: V(), prevPos: V(), vel: V(), q: new THREE.Quaternion(), rate: V(), // rate: x pitch (+nose up), y yaw (+right), z roll (+right)
   grounded: true, airborne: false, alive: true, respawnAt: 0, touchdownSpeed: 0,
-  collective: 0, rotorThrust: 0, lifting: false,   // collective and rotorThrust are used by the realistic model
+  collective: 0.5, rotorThrust: 0.95, lifting: false,   // collective and rotorThrust are used by the realistic model
   gunHeat: 0, overheated: false, gunTimer: 0, rockets: TUNING.rocketCount, rocketTimer: 0, reloadUntil: 0, podSide: 0,
 };
 const drill = {
@@ -923,7 +924,7 @@ function respawn() {
   heli.vel.set(0, 0, 0); heli.rate.set(0, 0, 0);
   const goal = objectiveFor(drill.mode);
   heli.q.setFromAxisAngle(UP, Math.atan2(-(goal.x - pad.x), -(goal.z - pad.z)));
-  Object.assign(heli, { grounded: true, airborne: false, alive: true, touchdownSpeed: 0, collective: 0, rotorThrust: 0, lifting: false, gunHeat: 0, overheated: false, gunTimer: 0,
+  Object.assign(heli, { grounded: true, airborne: false, alive: true, touchdownSpeed: 0, collective: 0.5, rotorThrust: 0.5 * REALISTIC.maxThrust, lifting: false, gunHeat: 0, overheated: false, gunTimer: 0,
     rockets: TUNING.rocketCount, rocketTimer: 0, reloadUntil: 0 });
   heliMesh.visible = state.camMode === 'chase';
   resetRingRun();
@@ -968,7 +969,8 @@ function stepHeli(h, inp) {
   up.set(0, 1, 0).applyQuaternion(heli.q);
   let thrust;
   if (real) {
-    heli.collective = clamp(heli.collective + inp.throttle * R.collectiveRate * h, 0, 1);
+    if (inp.throttle) heli.collective = clamp(heli.collective + inp.throttle * R.collectiveRate * h, 0, 1);
+    else heli.collective += clamp(0.5 - heli.collective, -R.collectiveReturn * h, R.collectiveReturn * h);
     heli.rotorThrust += (heli.collective * R.maxThrust - heli.rotorThrust) * (1 - Math.exp(-h / R.spoolTime));
     thrust = heli.rotorThrust * (1 + R.translationalLift * smoothstep(8, 22, Math.hypot(heli.vel.x, heli.vel.z)));
   } else {
@@ -1578,17 +1580,16 @@ scaleSel.value = String(settings.scale);
 scaleSel.addEventListener('change', () => { settings.scale = Number(scaleSel.value); saveSettings(); resize(); });
 const FLIGHT_HINTS = {
   arcade: 'Throttle works like Battlefield: hold it to climb or sink, and let go to settle into a slow sink.',
-  realistic: 'Throttle moves the collective lever, and it stays where you leave it. The rotor takes a moment to respond, power changes swing the nose (correct with yaw), and climbs and turns carry more momentum.',
+  realistic: 'Throttle moves the collective lever gradually, and it eases back to the middle when you let go. The rotor takes a moment to respond, power changes swing the nose (correct with yaw), and climbs and turns carry more momentum.',
 };
 const flightSel = $('flight');
 function setFlightModel(mode) {
   settings.flight = mode; saveSettings();
   flightSel.value = mode;
   $('flight-hint').textContent = FLIGHT_HINTS[mode];
-  // keep an airborne helicopter hovering across the switch
-  const hover = !heli.grounded;
-  heli.collective = hover ? REALISTIC.torqueNeutral : 0;
-  heli.rotorThrust = hover ? REALISTIC.torqueNeutral * REALISTIC.maxThrust : 0;
+  // start from the centred lever, the same slow sink both models have with no input
+  heli.collective = 0.5;
+  heli.rotorThrust = 0.5 * REALISTIC.maxThrust;
 }
 flightSel.addEventListener('change', () => setFlightModel(flightSel.value));
 const shadowSel = $('shadows');
