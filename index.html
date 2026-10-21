@@ -377,7 +377,7 @@ function rawHeight(x, z) {
   h += smoothstep(0.6, 0.98, r) * (190 + 110 * fbm(x * 0.007 + 40, z * 0.007 - 12, 4));
   return h;
 }
-const ZONES = [{ x: TOWN.x, z: TOWN.z, r0: 250, r1: 350 }]
+const ZONES = [{ x: TOWN.x, z: TOWN.z, r0: 375, r1: 480 }]
   .concat(PADS.filter(p => !p.roof).map(p => ({ x: p.x, z: p.z, r0: 40, r1: 110 })));
 ZONES.forEach(zn => { zn.h = rawHeight(zn.x, zn.z); });
 function shapedHeight(x, z) {
@@ -554,20 +554,21 @@ const centreBuilding = (() => {
     }
   };
   let centre = null;
-  // a round town 13 blocks across; towers rise in a band around the rooftop-pad building
-  for (let gx = -6; gx <= 6; gx++) for (let gz = -6; gz <= 6; gz++) {
+  // a round town 19 blocks across; towers rise in a wide band around the rooftop-pad building
+  const TOWN_RINGS = 9.45;
+  for (let gx = -9; gx <= 9; gx++) for (let gz = -9; gz <= 9; gz++) {
     const ring = Math.hypot(gx, gz);
-    if (ring > 6.3) continue;
+    if (ring > TOWN_RINGS) continue;
     const cx = TOWN.x + gx * 34 + (gx ? (rng() - 0.5) * 4 : 0), cz = TOWN.z + gz * 34 + (gz ? (rng() - 0.5) * 4 : 0);
     let w, d, h, colours = palette;
     if (gx === 0 && gz === 0) { w = 28; d = 28; h = 30; }
     else {
       if (rng() < 0.2) continue;
       if (groundPads.some(p => Math.hypot(cx - p.x, cz - p.z) < 60)) continue;
-      if (ring >= 1.5 && ring <= 4.5 && rng() < 0.18) {
-        w = 14 + rng() * 8; d = 14 + rng() * 8; h = 45 + rng() * 50; colours = towerPalette;
+      if (ring >= 1.5 && ring <= 6.5 && rng() < 0.24) {
+        w = 14 + rng() * 8; d = 14 + rng() * 8; h = 45 + rng() * 65; colours = towerPalette;
       } else {
-        w = 12 + rng() * 14; d = 12 + rng() * 14; h = 6 + rng() * (6 + 26 * (1 - ring / 6.3));
+        w = 12 + rng() * 14; d = 12 + rng() * 14; h = 6 + rng() * (6 + 26 * (1 - ring / TOWN_RINGS));
       }
     }
     const b = { x0: cx - w / 2, x1: cx + w / 2, z0: cz - d / 2, z1: cz + d / 2, top: townH + h };
@@ -645,7 +646,7 @@ const trees = (() => {
     const x = (rng() * 2 - 1) * (HALF - 100), z = (rng() * 2 - 1) * (HALF - 100), h = terrainHeight(x, z);
     if (h > 185) continue;
     if (Math.abs(terrainHeight(x + 4, z) - h) + Math.abs(terrainHeight(x, z + 4) - h) > 2.6) continue;
-    if (Math.hypot(x - TOWN.x, z - TOWN.z) < 270) continue;
+    if (Math.hypot(x - TOWN.x, z - TOWN.z) < 400) continue;
     if (PADS.some(p => Math.hypot(x - p.x, z - p.z) < 110)) continue;
     if (TARGET_SPOTS.some(([tx, tz]) => Math.hypot(x - tx, z - tz) < 30)) continue;
     if (fbm(x * 0.006 + 70, z * 0.006, 2) < -0.05) continue;
