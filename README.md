@@ -2,7 +2,11 @@
 
 A browser helicopter trainer for practising Battlefield-style flying and aiming on a PC without a discrete GPU. One self-contained page (`index.html`) built on three.js r128, loaded from cdnjs.
 
-## Run
+## Play
+
+Live at **https://katayr.github.io/rotorwash/** (GitHub Pages, redeployed by `.github/workflows/pages.yml` on every push to `main`).
+
+## Run locally
 
 Open `index.html` through any local web server, for example:
 

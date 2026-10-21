@@ -1,0 +1,43 @@
+# Publishes index.html to GitHub Pages on every push to main.
+# index.html is written without <html>/<head>/<body> (the claude.ai artifact adds them),
+# so this wraps it in a full document with a charset and viewport before deploying.
+name: Pages
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Wrap the page in a full HTML document
+        run: |
+          mkdir _site
+          {
+            printf '<!doctype html>\n<html lang="en">\n<head>\n<meta charset="utf-8">\n'
+            printf '<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">\n'
+            printf '<style>body{margin:0}</style>\n</head>\n<body>\n'
+            cat index.html
+            printf '\n</body>\n</html>\n'
+          } > _site/index.html
+      - uses: actions/configure-pages@v5
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: _site
+      - id: deployment
+        uses: actions/deploy-pages@v4
