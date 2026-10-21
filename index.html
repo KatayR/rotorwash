@@ -272,7 +272,7 @@ const BUTTONS = {
   fire: { label: 'Fire gun' },
   rockets: { label: 'Fire rockets' },
   camera: { label: 'Switch camera' },
-  respawn: { label: 'Respawn on pad (hold)' },
+  respawn: { label: 'Respawn (hold; tap after a crash)' },
   help: { label: 'Show / hide help' },
 };
 const DEFAULT_BINDINGS = {
@@ -918,7 +918,7 @@ function crash(reason) {
   heliMesh.visible = false;
   explosion(heli.pos, true);
   stats.crashes++;
-  showMessage('Crashed', `${reason} · respawning`, 'danger', 2.8);
+  showMessage('Crashed', `${reason} · tap ${keyName(bindings.respawn.code)} to respawn`, 'danger', 2.8);
   resetRingRun();
   drill.landing.timerStart = null;
 }
@@ -1165,6 +1165,8 @@ function boundCodes() {
 function pressEdge(code) {
   if (code === bindings.camera.code) toggleCamera();
   if (code === bindings.help.code) setHelp(!state.helpVisible);
+  // after a crash a tap is enough; the key must then be released before a hold counts again
+  if (code === bindings.respawn.code && !heli.alive) { respawn(); state.respawnArmed = false; }
 }
 
 function requestLock() {
@@ -1204,7 +1206,7 @@ document.addEventListener('visibilitychange', () => { if (document.hidden && sta
 // holding the respawn key fills a ring; it fires once per press
 function updateRespawnHold(dt) {
   if (!isDown(bindings.respawn.code)) { state.respawnHold = 0; state.respawnArmed = true; return; }
-  if (!state.respawnArmed) return;
+  if (!state.respawnArmed || !heli.alive) { state.respawnHold = 0; return; }
   state.respawnHold += dt;
   if (state.respawnHold >= RESPAWN_HOLD) { respawn(); state.respawnHold = 0; state.respawnArmed = false; }
 }
