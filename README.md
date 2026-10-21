@@ -24,8 +24,19 @@ All of these can be rebound in the menu's **Controls** tab. Pitch, roll and yaw 
 | A / D | Roll |
 | Left / right click | Gun / rockets |
 | C | Chase or cockpit camera |
-| Hold R | Respawn on the home pad |
+| Hold R (tap after a crash) | Respawn on the home pad |
 | H | Show / hide help |
+
+## Flight models
+
+Pick one on the menu's **Fly** tab.
+
+- **Battlefield:** throttle is momentary. Hold it to climb or sink, and let go to settle into a slow sink.
+- **More realistic:** throttle moves a collective lever that stays where it is left. Rotor thrust lags the lever, power changes yaw the nose through main-rotor torque, there is translational lift at speed, and the helicopter carries more momentum. Its constants are in the `REALISTIC` object.
+
+## World
+
+A 3 km square map with mountains at the edges, a round town about 635 m across with towers up to 110 m, three ground pads and a rooftop pad.
 
 ## Drills
 
@@ -35,4 +46,4 @@ All of these can be rebound in the menu's **Controls** tab. Pitch, roll and yaw 
 
 ## Tuning
 
-Every flight, weapon and camera constant is in the `TUNING` object at the top of the script.
+Every flight, weapon and camera constant is in the `TUNING` object at the top of the script, and the realistic model's overrides are in `REALISTIC` beside it.
