@@ -41,7 +41,7 @@ A 3 km square map with mountains at the edges, a round town about 635 m across w
 ## Drills
 
 - **Free flight:** 12 target vehicles to shoot, marked in red.
-- **Ring course:** 10 rings against the clock, best time kept.
+- **Ring course:** 13 rings in one smooth loop against the clock, best time kept.
 - **Landing drill:** pads A, B, rooftop C and home in turn, each landing graded by touch-down speed.
 
 ## Tuning

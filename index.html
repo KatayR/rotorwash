@@ -187,7 +187,7 @@ select{background:var(--panel-raised);color:var(--ink);border:1px solid var(--li
       <fieldset class="drills">
         <legend class="label">Drill</legend>
         <label class="drill"><input type="radio" name="drill" value="free" id="drill-free"><span class="drill-title">Free flight</span><span class="drill-text">Fly anywhere. Vehicles marked in red are targets for the gun and rockets.</span></label>
-        <label class="drill"><input type="radio" name="drill" value="rings" id="drill-rings"><span class="drill-title">Ring course</span><span class="drill-text">Ten rings through the valleys and over the town, against the clock. Your best time is kept.</span></label>
+        <label class="drill"><input type="radio" name="drill" value="rings" id="drill-rings"><span class="drill-title">Ring course</span><span class="drill-text">Thirteen rings in one loop past the town and through the valleys, against the clock. Your best time is kept.</span></label>
         <label class="drill"><input type="radio" name="drill" value="landing" id="drill-landing"><span class="drill-title">Landing drill</span><span class="drill-text">Fly to each pad in turn, including a rooftop, and set down gently. Touch-down speed is graded.</span></label>
       </fieldset>
       <div class="field"><label for="flight">Flight model</label><select id="flight"><option value="arcade">Battlefield</option><option value="realistic">More realistic</option></select><span></span></div>
@@ -271,7 +271,7 @@ const UP = V(0, 1, 0);
 const G = TUNING.gravity;
 
 // ---------- storage (per-browser conveniences only) ----------
-const KEYS = { bindings: 'rotorwash.bindings.v1', settings: 'rotorwash.settings.v1', best: 'rotorwash.bestRing.v1', help: 'rotorwash.help.v1' };
+const KEYS = { bindings: 'rotorwash.bindings.v1', settings: 'rotorwash.settings.v1', best: 'rotorwash.bestRing.v2', help: 'rotorwash.help.v1' };
 const store = {
   get(key, fallback) { try { const s = localStorage.getItem(key); return s ? JSON.parse(s) : fallback; } catch (e) { return fallback; } },
   set(key, value) { try { localStorage.setItem(key, JSON.stringify(value)); } catch (e) { /* storage unavailable */ } },
@@ -384,8 +384,9 @@ const PADS = [
 const PAD_RADIUS = 12;
 const TARGET_SPOTS = [[-390, 165], [-348, 204], [-429, 225], [180, -345], [225, -306], [141, -294],
   [-180, -630], [-132, -669], [-228, -663], [-600, -60], [-648, -15], [-567, 6]];
-const RING_PATH = [[0, 375, 18], [90, 165, 24], [300, 45, 22], [510, 255, 20], [645, -180, 28],
-  [375, -570, 24], [-90, -705, 34], [-540, -450, 24], [-705, 60, 28], [-330, 390, 20]];
+// one anticlockwise loop from the home pad; no turn between legs is sharper than about 45°
+const RING_PATH = [[0, 375, 18], [120, 180, 22], [330, 90, 24], [560, 10, 22], [690, -180, 26], [680, -420, 24],
+  [480, -600, 26], [200, -700, 28], [-160, -700, 30], [-500, -500, 26], [-700, -200, 28], [-650, 150, 24], [-330, 420, 20]];
 
 function rawHeight(x, z) {
   const n = fbm(x * 0.0026, z * 0.0026, 5);
@@ -688,9 +689,13 @@ scene.add(ringGroup);
 const RINGS = (() => {
   const geo = new THREE.TorusGeometry(RING_RADIUS, 0.7, 8, 40);
   const centres = RING_PATH.map(([x, z, agl]) => {
-    let top = -Infinity;
-    for (let dx = -16; dx <= 16; dx += 16) for (let dz = -16; dz <= 16; dz += 16) top = Math.max(top, groundHeight(x + dx, z + dz));
-    return V(x, top + agl, z);
+    // agl metres above the terrain, lifted only as far as needed to clear a roof under the ring
+    let y = terrainHeight(x, z) + agl;
+    for (const b of buildings) {
+      const dx = Math.max(b.x0 - x, 0, x - b.x1), dz = Math.max(b.z0 - z, 0, z - b.z1);
+      if (Math.hypot(dx, dz) < RING_RADIUS + 6) y = Math.max(y, b.top + RING_RADIUS + 4);
+    }
+    return V(x, y, z);
   });
   return centres.map((c, i) => {
     // each ring faces the leg that leads into it (the first one faces the home pad)
